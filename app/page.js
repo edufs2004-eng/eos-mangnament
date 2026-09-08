@@ -2,196 +2,151 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  Building2, 
-  Scale, 
-  Code2, 
-  ArrowDownRight, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle 
+  LayoutDashboard, 
+  Users, 
+  Briefcase, 
+  Receipt, 
+  CreditCard, 
+  TrendingUp, 
+  AlertCircle,
+  CheckCircle2,
+  ArrowUpRight
 } from 'lucide-react';
-import { getCompanyBalance, getInvoices } from '@/services/eosApi';
+import { getClients, getServices, getInvoices, getExpenses } from '@/services/eosApi';
+import Link from 'next/link';
 
 export default function DashboardPage() {
-  const [balance, setBalance] = useState(null);
-  const [invoices, setInvoices] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    clientsCount: 0,
+    servicesCount: 0,
+    pendingInvoicesTotal: 0,
+    monthlyIncome: 0,
+    loading: true
+  });
 
   useEffect(() => {
-    async function loadDashboardData() {
-      setLoading(true);
+    async function loadStats() {
       try {
-        const [balanceData, invoicesData] = await Promise.all([
-          getCompanyBalance(),
-          getInvoices()
+        const [clients, services, invoices, expenses] = await Promise.all([
+          getClients(),
+          getServices(),
+          getInvoices(),
+          getExpenses()
         ]);
+
+        const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM
         
-        setBalance(balanceData || {
-          saldo_liquido_caja_empresa: 0,
-          total_acumulado_legal: 0,
-          total_acumulado_tech: 0,
-          total_gastos_operacionales: 5000
+        let pendingTotal = 0;
+        let incomeTotal = 0;
+
+        invoices.forEach(inv => {
+          if (inv.estado_pago === 'PENDIENTE' || inv.estado_pago === 'ATRASADO') {
+            pendingTotal += Number(inv.monto_a_cobrar) || 0;
+          }
+          if (inv.estado_pago === 'PAGADO' && inv.fecha_pago_real?.startsWith(currentMonthStr)) {
+            incomeTotal += Number(inv.monto_a_cobrar) || 0;
+          }
         });
 
-        setInvoices(invoicesData || []);
-      } catch (error) {
-        console.error('Error al cargar datos del Dashboard:', error);
-      } finally {
-        setLoading(false);
+        setStats({
+          clientsCount: clients.length,
+          servicesCount: services.length,
+          pendingInvoicesTotal: pendingTotal,
+          monthlyIncome: incomeTotal,
+          loading: false
+        });
+      } catch (err) {
+        console.error('Error cargando dashboard:', err);
+        setStats(prev => ({ ...prev, loading: false }));
       }
     }
-
-    loadDashboardData();
+    loadStats();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-900 border-t-transparent mx-auto"></div>
-          <p className="mt-3 text-sm text-slate-600 font-medium">Conectando con Servicios EOS...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-10">
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-950 text-white font-bold tracking-wider shadow-md">
-              EOS
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Servicios EOS</h1>
-              <p className="text-xs font-medium text-slate-500">Blindaje Legal & Inteligencia Tecnológica</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-            <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-            Sistema Operativo Activo
-          </span>
-        </div>
+    <div className="min-h-screen bg-[#f8fafc] p-6 md:p-10 text-slate-900">
+      <header className="mb-8 flex flex-col gap-2 border-b border-slate-200 pb-5">
+        <h1 className="text-2xl font-extrabold tracking-tight flex items-center gap-3 text-slate-950">
+          <LayoutDashboard className="h-7 w-7 text-amber-600" />
+          Panel Principal EOS
+        </h1>
+        <p className="text-xs text-slate-500">
+          Resumen ejecutivo de operaciones, finanzas y control corporativo.
+        </p>
       </header>
 
-      {/* METRICAS DE CAJA */}
-      <section className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Caja Empresa (30%)</span>
-            <div className="rounded-lg bg-blue-50 p-2 text-blue-900"><Building2 className="h-5 w-5" /></div>
+      {/* TARJETAS DE MÉTRICAS */}
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-10">
+        <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/80 border-l-4 border-l-amber-500">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Ingresos del Mes</p>
+          <div className="text-3xl font-extrabold text-slate-950">
+            {stats.loading ? '...' : `$${stats.monthlyIncome.toLocaleString('es-CL')}`}
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-slate-900">
-              ${Number(balance?.saldo_liquido_caja_empresa || 0).toLocaleString('es-CL')} CLP
-            </div>
-            <p className="mt-1 text-xs text-slate-500">Fondo libre para operaciones</p>
-          </div>
+          <p className="text-[10px] text-emerald-600 font-semibold mt-2 flex items-center gap-1">
+            <TrendingUp className="h-3 w-3" /> Facturado este mes fiscal
+          </p>
         </div>
 
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">División Legal</span>
-            <div className="rounded-lg bg-amber-50 p-2 text-amber-700"><Scale className="h-5 w-5" /></div>
+        <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/80">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Por Cobrar / Pendiente</p>
+          <div className="text-3xl font-extrabold text-amber-600">
+            {stats.loading ? '...' : `$${stats.pendingInvoicesTotal.toLocaleString('es-CL')}`}
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-slate-900">
-              ${Number(balance?.total_acumulado_legal || 0).toLocaleString('es-CL')} CLP
-            </div>
-            <div className="mt-1 flex items-center text-xs text-amber-700 font-medium">
-              <AlertCircle className="mr-1 h-3.5 w-3.5" /> Deuda pendiente: -$5.000 CLP
-            </div>
-          </div>
+          <p className="text-[10px] text-slate-500 font-medium mt-2">Cuotas vigentes y atrasadas</p>
         </div>
 
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">División Tech</span>
-            <div className="rounded-lg bg-teal-50 p-2 text-teal-700"><Code2 className="h-5 w-5" /></div>
+        <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/80">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Clientes Activos</p>
+          <div className="text-3xl font-extrabold text-slate-950">
+            {stats.loading ? '...' : stats.clientsCount}
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-slate-900">
-              ${Number(balance?.total_acumulado_tech || 0).toLocaleString('es-CL')} CLP
-            </div>
-            <p className="mt-1 text-xs text-slate-500">Acumulado por servicios web/data</p>
-          </div>
+          <p className="text-[10px] text-slate-500 font-medium mt-2">Empresas y personas registradas</p>
         </div>
 
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Gastos / Retiros</span>
-            <div className="rounded-lg bg-rose-50 p-2 text-rose-700"><ArrowDownRight className="h-5 w-5" /></div>
+        <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/80">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Servicios del Catálogo</p>
+          <div className="text-3xl font-extrabold text-slate-950">
+            {stats.loading ? '...' : stats.servicesCount}
           </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-slate-900">
-              ${Number(balance?.total_gastos_operacionales || 0).toLocaleString('es-CL')} CLP
-            </div>
-            <p className="mt-1 text-xs text-rose-600 font-medium">Google Workspace / Servidores</p>
-          </div>
+          <p className="text-[10px] text-slate-500 font-medium mt-2">Legal, Tech y Mixtos</p>
         </div>
       </section>
 
-      {/* COBROS */}
-      <section className="rounded-xl bg-white shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Cobros y Facturación Activa</h2>
-          <p className="text-xs text-slate-500">Registro de cuotas e ingresos de clientes</p>
-        </div>
+      {/* ACCESOS RÁPIDOS */}
+      <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Accesos Directos del Sistema</h2>
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Link href="/clientes" className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 hover:border-amber-400 transition-all group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+              <Users className="h-5 w-5" />
+            </div>
+            <ArrowUpRight className="h-5 w-5 text-slate-300 group-hover:text-amber-600 transition-colors" />
+          </div>
+          <h3 className="font-bold text-slate-950 text-base mb-1">Directorio de Clientes</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">Administra la base de datos de clientes corporativos y asigna contratos de servicios.</p>
+        </Link>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-3 font-semibold">Folio</th>
-                <th className="px-6 py-3 font-semibold">Cliente</th>
-                <th className="px-6 py-3 font-semibold">Servicio</th>
-                <th className="px-6 py-3 font-semibold">Monto</th>
-                <th className="px-6 py-3 font-semibold">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {invoices.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-slate-500 text-xs">
-                    No hay boletas registradas o pendientes aún.
-                  </td>
-                </tr>
-              ) : (
-                invoices.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-6 py-4 font-mono font-medium text-slate-700">{inv.folio_interno}</td>
-                    <td className="px-6 py-4 font-semibold text-slate-900">
-                      {inv.contracts?.clients?.nombre_razon_social || 'Cliente General'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
-                        {inv.contracts?.services?.nombre_servicio || 'Servicio General'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-bold text-slate-900">
-                      ${Number(inv.monto_a_cobrar).toLocaleString('es-CL')} CLP
-                    </td>
-                    <td className="px-6 py-4">
-                      {inv.estado_pago === 'PAGADO' ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Pagado
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200">
-                          <Clock className="h-3.5 w-3.5" /> Pendiente
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Link href="/cobros" className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 hover:border-amber-400 transition-all group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+              <Receipt className="h-5 w-5" />
+            </div>
+            <ArrowUpRight className="h-5 w-5 text-slate-300 group-hover:text-amber-600 transition-colors" />
+          </div>
+          <h3 className="font-bold text-slate-950 text-base mb-1">Control de Cobros</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">Liquida cuotas, procesa abonos parciales y adjunta comprobantes bancarios obligatorios.</p>
+        </Link>
+
+        <Link href="/reportes" className="rounded-2xl bg-[#090d16] p-6 shadow-lg border border-slate-800 hover:border-amber-500 transition-all group text-white">
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+              <Briefcase className="h-5 w-5" />
+            </div>
+            <ArrowUpRight className="h-5 w-5 text-slate-500 group-hover:text-amber-400 transition-colors" />
+          </div>
+          <h3 className="font-bold text-white text-base mb-1">Cierres y Reportes</h3>
+          <p className="text-xs text-slate-400 leading-relaxed">Genera los balances mensuales y anuales con la distribución exacta de utilidades.</p>
+        </Link>
       </section>
     </div>
   );

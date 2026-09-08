@@ -138,6 +138,10 @@ export async function createServiceRecord(serviceData) {
 // Obtener todos los cobros con información de cliente, servicio y moneda
 export async function getInvoices() {
   try {
+    // 1. EJECUTAR EL DETECTOR DE MOROSIDAD ANTES DE TRAER LOS DATOS
+    await supabase.rpc('actualizar_morosidades');
+
+    // 2. AHORA SÍ, TRAER LOS DATOS ACTUALIZADOS
     const { data, error } = await supabase
       .from('invoices_receipts')
       .select(`
@@ -320,6 +324,70 @@ export async function createContractAndInvoices({
     return { contract, invoices };
   } catch (err) {
     console.error('Error al crear contrato y cuotas:', err);
+    throw err;
+  }
+}
+// Actualizar datos de una cuota (Ej: Cambiar fecha de vencimiento manual)
+export async function updateInvoiceRecord(invoiceId, updates) {
+  try {
+    const { data, error } = await supabase
+      .from('invoices_receipts')
+      .update(updates)
+      .eq('id', invoiceId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al actualizar la boleta:', err);
+    throw err;
+  }
+}
+
+// Procesar un Pago Parcial (Liquida una parte y crea una nueva deuda por el saldo)
+export async function registerPartialPayment({ invoiceId, montoFinalClp, montoRestanteBase, comprobanteUrl, fechaPagoReal, valorUfDia }) {
+  try {
+    // 1. Obtener la boleta original
+    const { data: originalInvoice, error: fetchError } = await supabase
+      .from('invoices_receipts')
+      .select('*')
+      .eq('id', invoiceId)
+      .single();
+      
+    if (fetchError) throw fetchError;
+
+    // 2. Liquidar la boleta actual con el monto parcial que SÍ pagaron
+    const { error: updateError } = await supabase
+      .from('invoices_receipts')
+      .update({
+        estado_pago: 'PAGADO',
+        fecha_pago_real: fechaPagoReal,
+        comprobante_url: comprobanteUrl || null,
+        monto_a_cobrar: montoFinalClp, 
+        valor_uf_dia: valorUfDia || null
+      })
+      .eq('id', invoiceId);
+      
+    if (updateError) throw updateError;
+
+    // 3. Crear automáticamente una nueva boleta PENDIENTE por el saldo que falta
+    const { error: insertError } = await supabase
+      .from('invoices_receipts')
+      .insert([{
+        contract_id: originalInvoice.contract_id,
+        folio_interno: originalInvoice.folio_interno + '-SALDO',
+        numero_cuota_actual: originalInvoice.numero_cuota_actual,
+        monto_a_cobrar: montoRestanteBase, // El remanente en moneda original (CLP o UF)
+        fecha_vencimiento: originalInvoice.fecha_vencimiento, 
+        estado_pago: 'PENDIENTE'
+      }]);
+      
+    if (insertError) throw insertError;
+
+    return true;
+  } catch (err) {
+    console.error('Error al procesar pago parcial:', err);
     throw err;
   }
 }

@@ -248,3 +248,78 @@ export async function updateClientRecord(id, clientData) {
     throw err;
   }
 }
+// Crear un contrato y generar sus cuotas/boletas automáticamente
+export async function createContractAndInvoices({
+  client_id,
+  service_id,
+  monto_total_acordado,
+  moneda = 'CLP',
+  tipo_pago = 'UNICO',
+  numero_cuotas = 1,
+  fecha_inicio = new Date().toISOString().split('T')[0],
+  marcar_primer_pago_pagado = false,
+  fecha_pago_real = null,
+  valor_uf_dia = null
+}) {
+  try {
+    // 1. Insertar el contrato
+    const { data: contract, error: contractError } = await supabase
+      .from('contracts')
+      .insert([{
+        client_id,
+        service_id,
+        monto_total_acordado: parseFloat(monto_total_acordado),
+        moneda,
+        tipo_pago,
+        numero_cuotas: parseInt(numero_cuotas),
+        fecha_inicio
+      }])
+      .select()
+      .single();
+
+    if (contractError) throw contractError;
+
+    // 2. Generar las cuotas/boletas automáticamente
+    const numCuotas = tipo_pago === 'UNICO' ? 1 : parseInt(numero_cuotas);
+    const montoCuotaBase = parseFloat(monto_total_acordado) / numCuotas;
+    const timestampFolio = Date.now().toString().slice(-4);
+
+    const invoicesToInsert = [];
+
+    for (let i = 1; i <= numCuotas; i++) {
+      const fechaVenc = new Date(fecha_inicio);
+      fechaVenc.setMonth(fechaVenc.getMonth() + (i - 1));
+
+      const esPrimeraPagada = i === 1 && marcar_primer_pago_pagado;
+      
+      // Si es en UF y se marcó pagada, calculamos los CLP reales para la repartición 30/70
+      let montoCuotaFinal = montoCuotaBase;
+      if (esPrimeraPagada && moneda === 'UF' && valor_uf_dia) {
+        montoCuotaFinal = montoCuotaBase * parseFloat(valor_uf_dia);
+      }
+
+      invoicesToInsert.push({
+        contract_id: contract.id,
+        folio_interno: `EOS-${new Date().getFullYear()}-${timestampFolio}-C${i}`,
+        numero_cuota_actual: i,
+        monto_a_cobrar: montoCuotaFinal,
+        fecha_vencimiento: fechaVenc.toISOString().split('T')[0],
+        estado_pago: esPrimeraPagada ? 'PAGADO' : 'PENDIENTE',
+        fecha_pago_real: esPrimeraPagada ? (fecha_pago_real || new Date().toISOString()) : null,
+        valor_uf_dia: esPrimeraPagada && moneda === 'UF' ? parseFloat(valor_uf_dia) : null
+      });
+    }
+
+    const { data: invoices, error: invoicesError } = await supabase
+      .from('invoices_receipts')
+      .insert(invoicesToInsert)
+      .select();
+
+    if (invoicesError) throw invoicesError;
+
+    return { contract, invoices };
+  } catch (err) {
+    console.error('Error al crear contrato y cuotas:', err);
+    throw err;
+  }
+}

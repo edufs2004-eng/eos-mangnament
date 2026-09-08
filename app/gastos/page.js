@@ -59,7 +59,7 @@ export default function GastosPage() {
       });
       await loadData();
     } catch (err) {
-      alert('Error al registrar el gasto o deuda.');
+      alert('Error al registrar el gasto o retiro.');
     } finally {
       setSubmitting(false);
     }
@@ -170,7 +170,7 @@ export default function GastosPage() {
         </div>
       </section>
 
-      {/* MODAL GASTO O DEUDA */}
+      {/* MODAL GASTO O RETIRO */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
@@ -223,7 +223,7 @@ export default function GastosPage() {
                   type="date" 
                   required 
                   value={formData.fecha_gasto} 
-                  onChange={(e) => setFormData({...formData, fecha_gase: e.target.value})} 
+                  onChange={(e) => setFormData({...formData, fecha_gasto: e.target.value})} 
                   className="w-full rounded-xl border border-slate-300 p-2.5 text-sm text-slate-900" 
                 />
               </div>

@@ -43,7 +43,7 @@ export default function ReportesPage() {
     exp.fecha_gasto?.startsWith(`${selectedYear}-${mesString}`)
   );
 
-  // CÁLCULOS MENSUALES GLOBALES Y POR DIVISIÓN
+  // CÁLCULOS MENSUALES USANDO LEDGER_SPLIT (HISTÓRICO REAL)
   let ingresosBrutosMes = 0;
   let cajaEmpresaMes = 0;
   let liquidacionLegalBrutaMes = 0;
@@ -51,17 +51,23 @@ export default function ReportesPage() {
 
   facturasMes.forEach(inv => {
     const monto = Number(inv.monto_a_cobrar);
-    const pctCaja = Number(inv.contracts?.pct_caja_empresa ?? inv.contracts?.services?.pct_caja_empresa ?? 30) / 100;
-    const pctLegal = Number(inv.contracts?.pct_ejecutor_legal ?? inv.contracts?.services?.pct_ejecutor_legal ?? 70) / 100;
-    const pctTech = Number(inv.contracts?.pct_ejecutor_tech ?? inv.contracts?.services?.pct_ejecutor_tech ?? 0) / 100;
-
     ingresosBrutosMes += monto;
-    cajaEmpresaMes += (monto * pctCaja);
-    liquidacionLegalBrutaMes += (monto * pctLegal);
-    liquidacionTechBrutaMes += (monto * pctTech);
+
+    const split = inv.ledger_split?.[0] || inv.ledger_split;
+    if (split) {
+      cajaEmpresaMes += Number(split.monto_caja_empresa || 0);
+      liquidacionLegalBrutaMes += Number(split.monto_modulo_legal || 0);
+      liquidacionTechBrutaMes += Number(split.monto_modulo_tech || 0);
+    } else {
+      const pctCaja = Number(inv.contracts?.pct_caja_empresa ?? inv.contracts?.services?.pct_caja_empresa ?? 30) / 100;
+      const pctLegal = Number(inv.contracts?.pct_ejecutor_legal ?? inv.contracts?.services?.pct_ejecutor_legal ?? 70) / 100;
+      const pctTech = Number(inv.contracts?.pct_ejecutor_tech ?? inv.contracts?.services?.pct_ejecutor_tech ?? 0) / 100;
+      cajaEmpresaMes += (monto * pctCaja);
+      liquidacionLegalBrutaMes += (monto * pctLegal);
+      liquidacionTechBrutaMes += (monto * pctTech);
+    }
   });
 
-  // GASTOS Y RETIROS SEGMENTADOS
   const gastosOperacionalesMes = gastosMes.filter(g => !g.es_deuda_socio);
   const totalGastosOpMes = gastosOperacionalesMes.reduce((acc, g) => acc + Number(g.monto), 0);
   const balanceNetoEmpresaMes = cajaEmpresaMes - totalGastosOpMes;
@@ -75,7 +81,7 @@ export default function ReportesPage() {
   const liquidoLegalMes = liquidacionLegalBrutaMes - totalGastosLegal;
   const liquidoTechMes = liquidacionTechBrutaMes - totalGastosTech;
 
-  // CÁLCULOS ANUALES GLOBALES Y POR DIVISIÓN
+  // CÁLCULOS ANUALES USANDO LEDGER_SPLIT (HISTÓRICO REAL)
   const facturasAno = invoices.filter(inv => 
     inv.estado_pago === 'PAGADO' && inv.fecha_pago_real?.startsWith(`${selectedYear}`)
   );
@@ -91,14 +97,21 @@ export default function ReportesPage() {
 
   facturasAno.forEach(inv => {
     const monto = Number(inv.monto_a_cobrar);
-    const pctCaja = Number(inv.contracts?.pct_caja_empresa ?? inv.contracts?.services?.pct_caja_empresa ?? 30) / 100;
-    const pctLegal = Number(inv.contracts?.pct_ejecutor_legal ?? inv.contracts?.services?.pct_ejecutor_legal ?? 70) / 100;
-    const pctTech = Number(inv.contracts?.pct_ejecutor_tech ?? inv.contracts?.services?.pct_ejecutor_tech ?? 0) / 100;
-
     ingresosBrutosAno += monto;
-    cajaEmpresaAno += (monto * pctCaja);
-    liquidacionLegalBrutaAno += (monto * pctLegal);
-    liquidacionTechBrutaAno += (monto * pctTech);
+
+    const split = inv.ledger_split?.[0] || inv.ledger_split;
+    if (split) {
+      cajaEmpresaAno += Number(split.monto_caja_empresa || 0);
+      liquidacionLegalBrutaAno += Number(split.monto_modulo_legal || 0);
+      liquidacionTechBrutaAno += Number(split.monto_modulo_tech || 0);
+    } else {
+      const pctCaja = Number(inv.contracts?.pct_caja_empresa ?? inv.contracts?.services?.pct_caja_empresa ?? 30) / 100;
+      const pctLegal = Number(inv.contracts?.pct_ejecutor_legal ?? inv.contracts?.services?.pct_ejecutor_legal ?? 70) / 100;
+      const pctTech = Number(inv.contracts?.pct_ejecutor_tech ?? inv.contracts?.services?.pct_ejecutor_tech ?? 0) / 100;
+      cajaEmpresaAno += (monto * pctCaja);
+      liquidacionLegalBrutaAno += (monto * pctLegal);
+      liquidacionTechBrutaAno += (monto * pctTech);
+    }
   });
 
   const gastosOperacionalesAno = gastosAno.filter(g => !g.es_deuda_socio);

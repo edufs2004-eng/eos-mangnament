@@ -135,36 +135,24 @@ export async function createServiceRecord(serviceData) {
     throw err;
   }
 }
-// Obtener todos los cobros con información de cliente, servicio y moneda
 export async function getInvoices() {
-  try {
-    // 1. EJECUTAR EL DETECTOR DE MOROSIDAD ANTES DE TRAER LOS DATOS
-    await supabase.rpc('actualizar_morosidades');
-
-    // 2. AHORA SÍ, TRAER LOS DATOS ACTUALIZADOS
-    const { data, error } = await supabase
-      .from('invoices_receipts')
-      .select(`
+  const { data, error } = await supabase
+    .from('invoices_receipts')
+    .select(`
+      *,
+      contracts (
         *,
-        contracts (
-          id,
-          monto_total_acordado,
-          moneda,
-          clients ( nombre_razon_social, tipo_cliente ),
-          services ( nombre_servicio, departamento, pct_caja_empresa, pct_ejecutor_legal, pct_ejecutor_tech )
-        )
-      `)
-      .order('fecha_vencimiento', { ascending: true });
-
-    if (error) {
-      console.error('Error al obtener cobros:', error);
-      return [];
-    }
-    return data || [];
-  } catch (err) {
-    console.error('Error de conexión en getInvoices:', err);
+        clients (*),
+        services (*)
+      ),
+      ledger_split (*)
+    `)
+    .order('fecha_vencimiento', { ascending: true });
+  if (error) {
+    console.error('Error fetching invoices:', error);
     return [];
   }
+  return data;
 }
 
 // Confirmar pago (Soporta UF, Porcentajes y Fechas Retroactivas)

@@ -14,9 +14,9 @@ import {
 const menuItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Clientes (CRM)', href: '/clientes', icon: Users },
-  { name: 'Servicios', href: '/servicios', icon: Briefcase },
   { name: 'Personal & Nómina', href: '/personal', icon: Users },
   { name: 'Cobros y Boletas', href: '/cobros', icon: Receipt },
+  { name: 'Servicios', href: '/servicios', icon: Briefcase },
   { name: 'Gastos y Deudas', href: '/gastos', icon: CreditCard },
   { name: 'Reportes y Cierres', href: '/reportes', icon: BarChart3 },
 ];
@@ -31,7 +31,7 @@ export default function Sidebar() {
         <img src="/logo_eos.png" alt="Servicios EOS" className="h-9 w-9 object-contain" />
         <div>
           <span className="font-extrabold text-white tracking-widest text-sm block">SERVICIOS EOS</span>
-          <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">Management v2.0.1</span>
+          <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">Management v2.3.1</span>
         </div>
       </div>
 

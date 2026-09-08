@@ -42,3 +42,67 @@ export async function getInvoices() {
     return [];
   }
 }
+// Obtener todos los clientes
+export async function getClients() {
+  try {
+    const { data, error } = await supabase
+      .from('clients')
+      .select(`
+        *,
+        contracts (
+          id,
+          monto_total_acordado,
+          estado
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error al obtener clientes:', error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Error de conexión en getClients:', err);
+    return [];
+  }
+}
+
+// Crear un nuevo cliente
+export async function createClientRecord(clientData) {
+  try {
+    const { data, error } = await supabase
+      .from('clients')
+      .insert([clientData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al crear cliente:', err);
+    throw err;
+  }
+}
+
+// Confirmar pago de una boleta/cuota (Dispara el trigger 30/70 en Supabase)
+export async function confirmInvoicePayment(invoiceId, comprobanteUrl = null) {
+  try {
+    const { data, error } = await supabase
+      .from('invoices_receipts')
+      .update({
+        estado_pago: 'PAGADO',
+        fecha_pago_real: new Date().toISOString(),
+        comprobante_url: comprobanteUrl
+      })
+      .eq('id', invoiceId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al confirmar pago:', err);
+    throw err;
+  }
+}

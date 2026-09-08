@@ -84,7 +84,6 @@ export async function createClientRecord(clientData) {
     throw err;
   }
 }
-
 // Confirmar pago de una boleta/cuota (Dispara el trigger 30/70 en Supabase)
 export async function confirmInvoicePayment(invoiceId, comprobanteUrl = null) {
   try {
@@ -103,6 +102,98 @@ export async function confirmInvoicePayment(invoiceId, comprobanteUrl = null) {
     return data;
   } catch (err) {
     console.error('Error al confirmar pago:', err);
+    throw err;
+  }
+}
+// Obtener lista de egresos y deudas asociadas
+export async function getExpenses() {
+  try {
+    const { data, error } = await supabase
+      .from('company_expenses')
+      .select(`
+        *,
+        users:socio_deudor_id ( id, nombre, email, rol )
+      `)
+      .order('fecha_gasto', { ascending: false });
+
+    if (error) {
+      console.error('Error al obtener gastos:', error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Error de conexión en getExpenses:', err);
+    return [];
+  }
+}
+
+// Obtener lista de socios/equipo para asignar deudas
+export async function getUsers() {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('nombre', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener usuarios:', error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Error de conexión en getUsers:', err);
+    return [];
+  }
+}
+
+// Registrar un nuevo gasto o retiro de socio
+export async function createExpenseRecord(expenseData) {
+  try {
+    const { data, error } = await supabase
+      .from('company_expenses')
+      .insert([expenseData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al registrar gasto:', err);
+    throw err;
+  }
+}
+// Obtener el catálogo completo de servicios
+export async function getServices() {
+  try {
+    const { data, error } = await supabase
+      .from('services')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error al obtener servicios:', error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Error de conexión en getServices:', err);
+    return [];
+  }
+}
+
+// Crear un nuevo servicio en el catálogo
+export async function createServiceRecord(serviceData) {
+  try {
+    const { data, error } = await supabase
+      .from('services')
+      .insert([serviceData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al crear servicio:', err);
     throw err;
   }
 }

@@ -8,7 +8,8 @@ import {
   Briefcase, 
   Receipt, 
   CreditCard, 
-  ShieldCheck
+  ShieldCheck,
+  BarChart3 
 } from 'lucide-react';
 
 const menuItems = [
@@ -17,6 +18,7 @@ const menuItems = [
   { name: 'Servicios', href: '/servicios', icon: Briefcase },
   { name: 'Cobros y Boletas', href: '/cobros', icon: Receipt },
   { name: 'Gastos y Deudas', href: '/gastos', icon: CreditCard },
+  { name: 'Reportes y Vouchers', href: '/reportes', icon: BarChart3 },
 ];
 
 export default function Sidebar() {

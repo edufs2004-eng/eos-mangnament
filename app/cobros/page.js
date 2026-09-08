@@ -10,10 +10,9 @@ import {
   Check, 
   X, 
   FileCheck2,
-  Calendar,
-  Building2,
   DollarSign,
-  ArrowRight
+  Calendar,
+  Calculator
 } from 'lucide-react';
 import { getInvoices, confirmInvoicePayment } from '@/services/eosApi';
 
@@ -25,8 +24,13 @@ export default function CobrosPage() {
   
   // Modal de confirmación de pago
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [comprobanteUrl, setComprobanteUrl] = useState('');
   const [confirming, setConfirming] = useState(false);
+  
+  // Campos del Formulario de Pago
+  const [comprobanteUrl, setComprobanteUrl] = useState('');
+  const [fechaPagoReal, setFechaPagoReal] = useState('');
+  const [valorUfDia, setValorUfDia] = useState('');
+  const [montoManualCLP, setMontoManualCLP] = useState('');
 
   // Cargar lista de cobros
   const loadInvoices = async () => {
@@ -40,17 +44,52 @@ export default function CobrosPage() {
     loadInvoices();
   }, []);
 
+  const openConfirmModal = (inv) => {
+    setSelectedInvoice(inv);
+    setComprobanteUrl('');
+    setFechaPagoReal(new Date().toISOString().split('T')[0]); // Fecha de hoy por defecto
+    setValorUfDia('');
+    setMontoManualCLP('');
+  };
+
+  // Cálculo en vivo del monto final en CLP según la moneda
+  const getMontoFinalCalculado = () => {
+    if (!selectedInvoice) return 0;
+    const moneda = selectedInvoice.contracts?.moneda || 'CLP';
+    const montoBase = Number(selectedInvoice.monto_a_cobrar);
+
+    if (moneda === 'UF') {
+      return montoBase * (Number(valorUfDia) || 0);
+    }
+    if (moneda === 'PORCENTAJE') {
+      return Number(montoManualCLP) || 0;
+    }
+    return montoBase; // CLP normal
+  };
+
   // Procesar confirmación de pago
   const handleConfirmPayment = async (e) => {
     e.preventDefault();
     if (!selectedInvoice) return;
 
+    const montoFinal = getMontoFinalCalculado();
+    if (montoFinal <= 0) {
+      alert('El monto final en pesos (CLP) debe ser mayor a 0 para repartir las comisiones.');
+      return;
+    }
+
     setConfirming(true);
     try {
-      await confirmInvoicePayment(selectedInvoice.id, comprobanteUrl.trim() || null);
+      await confirmInvoicePayment({
+        invoiceId: selectedInvoice.id,
+        comprobanteUrl: comprobanteUrl.trim(),
+        fechaPagoReal: fechaPagoReal,
+        montoFinalClp: montoFinal,
+        valorUfDia: selectedInvoice.contracts?.moneda === 'UF' ? parseFloat(valorUfDia) : null
+      });
+
       setSelectedInvoice(null);
-      setComprobanteUrl('');
-      await loadInvoices(); // Recargar datos para ver el estado actualizado
+      await loadInvoices(); // Recargar datos
     } catch (err) {
       alert('Ocurrió un error al confirmar el pago.');
     } finally {
@@ -69,18 +108,8 @@ export default function CobrosPage() {
     return matchesSearch && inv.estado_pago === statusFilter;
   });
 
-  // Métricas rápidas
-  const totalPendiente = invoices
-    .filter((inv) => inv.estado_pago === 'PENDIENTE')
-    .reduce((acc, curr) => acc + Number(curr.monto_a_cobrar), 0);
-
-  const totalCobrado = invoices
-    .filter((inv) => inv.estado_pago === 'PAGADO')
-    .reduce((acc, curr) => acc + Number(curr.monto_a_cobrar), 0);
-
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-10">
-      {/* HEADER */}
       <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -88,50 +117,10 @@ export default function CobrosPage() {
             Control de Cobros & Facturación
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Gestión de cuotas, verificación de transferencias y repartición automática 30/70
+            Gestión de cuotas en UF/Pesos/%, cobros retroactivos y repartición automática
           </p>
         </div>
       </header>
-
-      {/* METRICAS DE FACTURACIÓN */}
-      <section className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Por Cobrar (Pendiente)</span>
-            <div className="rounded-lg bg-amber-50 p-2 text-amber-700"><Clock className="h-5 w-5" /></div>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-amber-700">
-              ${totalPendiente.toLocaleString('es-CL')} CLP
-            </div>
-            <p className="mt-1 text-xs text-slate-500">Total en cuotas activas por recibir</p>
-          </div>
-        </div>
-
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Recaudado</span>
-            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700"><CheckCircle2 className="h-5 w-5" /></div>
-          </div>
-          <div className="mt-4">
-            <div className="text-3xl font-extrabold text-emerald-800">
-              ${totalCobrado.toLocaleString('es-CL')} CLP
-            </div>
-            <p className="mt-1 text-xs text-slate-500">Ingresado y distribuido a la caja y socios</p>
-          </div>
-        </div>
-
-        <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Regla de Negocio</span>
-            <div className="rounded-lg bg-blue-50 p-2 text-blue-900"><DollarSign className="h-5 w-5" /></div>
-          </div>
-          <div className="mt-4">
-            <div className="text-sm font-bold text-slate-900">30% Empresa / 70% Ejecutor</div>
-            <p className="mt-1 text-xs text-slate-500">El cálculo se ejecuta automáticamente en la BD al confirmar cada pago</p>
-          </div>
-        </div>
-      </section>
 
       {/* FILTROS Y BÚSQUEDA */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -172,8 +161,7 @@ export default function CobrosPage() {
                 <th className="px-6 py-3 font-semibold">Folio / Cuota</th>
                 <th className="px-6 py-3 font-semibold">Cliente</th>
                 <th className="px-6 py-3 font-semibold">Servicio</th>
-                <th className="px-6 py-3 font-semibold">Monto</th>
-                <th className="px-6 py-3 font-semibold">Reparto (30/70)</th>
+                <th className="px-6 py-3 font-semibold">Monto Acordado</th>
                 <th className="px-6 py-3 font-semibold">Vencimiento</th>
                 <th className="px-6 py-3 font-semibold">Estado</th>
                 <th className="px-6 py-3 font-semibold text-right">Acción</th>
@@ -182,28 +170,36 @@ export default function CobrosPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-slate-500 text-xs">
+                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500 text-xs">
                     Cargando listado de facturación...
                   </td>
                 </tr>
               ) : filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-slate-500 text-xs">
+                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500 text-xs">
                     No hay cobros registrados con los criterios seleccionados.
                   </td>
                 </tr>
               ) : (
                 filteredInvoices.map((inv) => {
+                  const moneda = inv.contracts?.moneda || 'CLP';
                   const monto = Number(inv.monto_a_cobrar);
-                  const retencionEmpresa = monto * 0.30;
-                  const ejecutorSocio = monto * 0.70;
+                  
+                  let displayMonto = `$${monto.toLocaleString('es-CL')} CLP`;
+                  if (moneda === 'UF') displayMonto = `${monto} UF`;
+                  if (moneda === 'PORCENTAJE') displayMonto = `${monto}% del total`;
+                  
+                  // Si ya está pagado en UF o %, el monto_a_cobrar ya se convirtió a CLP reales.
+                  if (inv.estado_pago === 'PAGADO' && moneda !== 'CLP') {
+                    displayMonto = `$${monto.toLocaleString('es-CL')} CLP (Convertido)`;
+                  }
 
                   return (
                     <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-4 font-mono font-bold text-slate-800">
                         {inv.folio_interno}
                         {inv.numero_cuota_actual > 1 && (
-                          <span className="block text-[10px] text-slate-400 font-sans font-normal">
+                          <span className="block text-[10px] text-slate-400 font-sans font-normal mt-0.5">
                             Cuota N° {inv.numero_cuota_actual}
                           </span>
                         )}
@@ -217,11 +213,13 @@ export default function CobrosPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 font-bold text-slate-900">
-                        ${monto.toLocaleString('es-CL')} CLP
-                      </td>
-                      <td className="px-6 py-4 text-xs">
-                        <div className="text-blue-900 font-medium">Empresa: ${retencionEmpresa.toLocaleString('es-CL')}</div>
-                        <div className="text-slate-500">Socio: ${ejecutorSocio.toLocaleString('es-CL')}</div>
+                        <span className={`px-2 py-1 rounded-md text-xs border ${
+                          moneda === 'UF' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                          moneda === 'PORCENTAJE' ? 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200' :
+                          'bg-transparent border-transparent'
+                        }`}>
+                          {displayMonto}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-xs text-slate-600 font-medium">
                         {inv.fecha_vencimiento}
@@ -240,13 +238,15 @@ export default function CobrosPage() {
                       <td className="px-6 py-4 text-right">
                         {inv.estado_pago === 'PENDIENTE' ? (
                           <button
-                            onClick={() => setSelectedInvoice(inv)}
+                            onClick={() => openConfirmModal(inv)}
                             className="inline-flex items-center gap-1 rounded-lg bg-blue-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-800 transition-colors"
                           >
-                            <FileCheck2 className="h-3.5 w-3.5" /> Confirmar Pago
+                            <FileCheck2 className="h-3.5 w-3.5" /> Liquidar
                           </button>
                         ) : (
-                          <span className="text-xs text-slate-400 font-medium italic">Liquidado</span>
+                          <span className="text-xs text-slate-400 font-medium italic">
+                            {inv.fecha_pago_real ? inv.fecha_pago_real.split('T')[0] : 'Liquidado'}
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -264,7 +264,7 @@ export default function CobrosPage() {
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 p-6 bg-slate-50">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Confirmar Recepción de Pago</h3>
+                <h3 className="text-lg font-bold text-slate-900">Liquidar Cobro</h3>
                 <p className="text-xs text-slate-500 font-mono mt-0.5">{selectedInvoice.folio_interno}</p>
               </div>
               <button 
@@ -276,35 +276,87 @@ export default function CobrosPage() {
             </div>
 
             <form onSubmit={handleConfirmPayment} className="p-6 space-y-4">
-              <div className="rounded-xl bg-blue-50 p-4 border border-blue-100 text-xs text-blue-900 space-y-1">
-                <div className="font-bold text-sm text-blue-950 mb-1">
-                  Monto: ${Number(selectedInvoice.monto_a_cobrar).toLocaleString('es-CL')} CLP
-                </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
                 <p>Cliente: <strong>{selectedInvoice.contracts?.clients?.nombre_razon_social}</strong></p>
                 <p>Servicio: {selectedInvoice.contracts?.services?.nombre_servicio}</p>
               </div>
 
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <span>
-                  Al hacer clic en confirmar, la base de datos ingresará automáticamente el <strong>30% a la Caja de la Empresa</strong> y asignará el <strong>70% al socio correspondiente</strong>.
+              {/* LÓGICA CONDICIONAL DE MONEDA */}
+              {selectedInvoice.contracts?.moneda === 'UF' && (
+                <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 space-y-3">
+                  <div className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                    <Calculator className="h-4 w-4" /> Cobro estipulado: {selectedInvoice.monto_a_cobrar} UF
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-indigo-900 uppercase mb-1">
+                      Valor de la UF del día de pago *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="Ej: 37500"
+                      value={valorUfDia}
+                      onChange={(e) => setValorUfDia(e.target.value)}
+                      className="w-full rounded-lg border border-indigo-300 p-2 text-sm text-slate-900 outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedInvoice.contracts?.moneda === 'PORCENTAJE' && (
+                <div className="p-4 rounded-xl bg-fuchsia-50 border border-fuchsia-200 space-y-3">
+                  <div className="text-sm font-bold text-fuchsia-900 flex items-center gap-2">
+                    <Calculator className="h-4 w-4" /> Cobro estipulado: {selectedInvoice.monto_a_cobrar}% del éxito
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-fuchsia-900 uppercase mb-1">
+                      Monto final ganado en Pesos (CLP) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="Ej: 500000"
+                      value={montoManualCLP}
+                      onChange={(e) => setMontoManualCLP(e.target.value)}
+                      className="w-full rounded-lg border border-fuchsia-300 p-2 text-sm text-slate-900 outline-none focus:border-fuchsia-600"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* MONTO FINAL EN PESOS PARA REPARTIR */}
+              <div className="rounded-xl bg-blue-900 p-4 shadow-inner text-white flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase text-blue-200">Monto final a repartir (CLP)</span>
+                <span className="text-xl font-bold">
+                  ${getMontoFinalCalculado().toLocaleString('es-CL')}
                 </span>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Comprobante o Link de Transferencia (Opcional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://drive.google.com/comprobante.pdf"
-                  value={comprobanteUrl}
-                  onChange={(e) => setComprobanteUrl(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 p-2.5 text-sm text-slate-900 outline-none focus:border-blue-600"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Fecha Real de Pago</label>
+                  <input
+                    type="date"
+                    required
+                    value={fechaPagoReal}
+                    onChange={(e) => setFechaPagoReal(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 p-2.5 text-sm text-slate-900 outline-none focus:border-blue-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Comprobante (Opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="Enlace o folio"
+                    value={comprobanteUrl}
+                    onChange={(e) => setComprobanteUrl(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 p-2.5 text-sm text-slate-900 outline-none focus:border-blue-600"
+                  />
+                </div>
               </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 mt-2">
                 <button
                   type="button"
                   onClick={() => setSelectedInvoice(null)}
@@ -314,11 +366,11 @@ export default function CobrosPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={confirming}
+                  disabled={confirming || getMontoFinalCalculado() <= 0}
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
                   <Check className="h-4 w-4" />
-                  {confirming ? 'Procesando...' : 'Confirmar y Repartir'}
+                  {confirming ? 'Procesando...' : 'Confirmar Ingreso'}
                 </button>
               </div>
             </form>

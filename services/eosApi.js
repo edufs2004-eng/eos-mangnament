@@ -18,30 +18,6 @@ export async function getCompanyBalance() {
   }
 }
 
-// Facturación y Boletas
-export async function getInvoices() {
-  try {
-    const { data, error } = await supabase
-      .from('invoices_receipts')
-      .select(`
-        *,
-        contracts (
-          clients ( nombre_razon_social ),
-          services ( nombre_servicio, departamento )
-        )
-      `)
-      .order('fecha_vencimiento', { ascending: true });
-
-    if (error) {
-      console.error('Error Supabase Invoices:', error);
-      return [];
-    }
-    return data || [];
-  } catch (err) {
-    console.error('Error de red/conexión en Invoices:', err);
-    return [];
-  }
-}
 // Obtener todos los clientes
 export async function getClients() {
   try {
@@ -68,12 +44,18 @@ export async function getClients() {
   }
 }
 
-// Crear un nuevo cliente
+// Crear un nuevo cliente (Maneja RUT opcional correctamente)
 export async function createClientRecord(clientData) {
   try {
+    const payload = { ...clientData };
+    // Si el RUT está vacío, lo pasamos como null para evitar errores de restricción única
+    if (payload.rut_identificacion === '') {
+      payload.rut_identificacion = null;
+    }
+
     const { data, error } = await supabase
       .from('clients')
-      .insert([clientData])
+      .insert([payload])
       .select()
       .single();
 
@@ -81,27 +63,6 @@ export async function createClientRecord(clientData) {
     return data;
   } catch (err) {
     console.error('Error al crear cliente:', err);
-    throw err;
-  }
-}
-// Confirmar pago de una boleta/cuota (Dispara el trigger 30/70 en Supabase)
-export async function confirmInvoicePayment(invoiceId, comprobanteUrl = null) {
-  try {
-    const { data, error } = await supabase
-      .from('invoices_receipts')
-      .update({
-        estado_pago: 'PAGADO',
-        fecha_pago_real: new Date().toISOString(),
-        comprobante_url: comprobanteUrl
-      })
-      .eq('id', invoiceId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('Error al confirmar pago:', err);
     throw err;
   }
 }
@@ -194,6 +155,88 @@ export async function createServiceRecord(serviceData) {
     return data;
   } catch (err) {
     console.error('Error al crear servicio:', err);
+    throw err;
+  }
+}
+// Actualizar un cliente existente
+export async function updateClientRecord(id, clientData) {
+  try {
+    const payload = { ...clientData };
+    if (payload.rut_identificacion === '') {
+      payload.rut_identificacion = null;
+    }
+
+    const { data, error } = await supabase
+      .from('clients')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al actualizar cliente:', err);
+    throw err;
+  }
+}
+// Obtener todos los cobros con información de cliente, servicio y moneda
+export async function getInvoices() {
+  try {
+    const { data, error } = await supabase
+      .from('invoices_receipts')
+      .select(`
+        *,
+        contracts (
+          id,
+          monto_total_acordado,
+          moneda,
+          clients ( nombre_razon_social, tipo_cliente ),
+          services ( nombre_servicio, departamento, pct_caja_empresa, pct_ejecutor_legal, pct_ejecutor_tech )
+        )
+      `)
+      .order('fecha_vencimiento', { ascending: true });
+
+    if (error) {
+      console.error('Error al obtener cobros:', error);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Error de conexión en getInvoices:', err);
+    return [];
+  }
+}
+
+// Confirmar pago (Soporta UF, Porcentajes y Fechas Retroactivas)
+export async function confirmInvoicePayment({ invoiceId, comprobanteUrl, fechaPagoReal, montoFinalClp, valorUfDia }) {
+  try {
+    const payload = {
+      estado_pago: 'PAGADO',
+      fecha_pago_real: fechaPagoReal, // Fecha seleccionada por el usuario
+      comprobante_url: comprobanteUrl || null
+    };
+
+    // Si hubo conversión (UF o Porcentaje), actualizamos el monto_a_cobrar a pesos chilenos reales
+    // para que el Trigger SQL calcule el 30/70 sobre dinero real.
+    if (montoFinalClp !== null) {
+      payload.monto_a_cobrar = montoFinalClp;
+    }
+    if (valorUfDia) {
+      payload.valor_uf_dia = valorUfDia;
+    }
+
+    const { data, error } = await supabase
+      .from('invoices_receipts')
+      .update(payload)
+      .eq('id', invoiceId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al confirmar pago:', err);
     throw err;
   }
 }

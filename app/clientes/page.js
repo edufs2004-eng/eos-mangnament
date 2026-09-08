@@ -11,18 +11,20 @@ import {
   Phone, 
   FileText, 
   X,
-  Plus
+  Edit
 } from 'lucide-react';
-import { getClients, createClientRecord } from '@/services/eosApi';
+import { getClients, createClientRecord, updateClientRecord } from '@/services/eosApi';
 
 export default function ClientesPage() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Modal y Formularios
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState(null); // null = Crear Nuevo, UUID = Editar
 
-  // Estado del formulario
   const [formData, setFormData] = useState({
     nombre_razon_social: '',
     tipo_cliente: 'PERSONA_NATURAL',
@@ -32,7 +34,6 @@ export default function ClientesPage() {
     estado: 'ACTIVO'
   });
 
-  // Cargar clientes
   const loadClients = async () => {
     setLoading(true);
     const data = await getClients();
@@ -44,32 +45,56 @@ export default function ClientesPage() {
     loadClients();
   }, []);
 
-  // Handler para crear cliente
+  // Abrir Modal para Crear
+  const openCreateModal = () => {
+    setEditingId(null);
+    setFormData({
+      nombre_razon_social: '',
+      tipo_cliente: 'PERSONA_NATURAL',
+      rut_identificacion: '',
+      email: '',
+      telefono: '',
+      estado: 'ACTIVO'
+    });
+    setIsModalOpen(true);
+  };
+
+  // Abrir Modal para Editar
+  const openEditModal = (client) => {
+    setEditingId(client.id);
+    setFormData({
+      nombre_razon_social: client.nombre_razon_social || '',
+      tipo_cliente: client.tipo_cliente || 'PERSONA_NATURAL',
+      rut_identificacion: client.rut_identificacion || '',
+      email: client.email || '',
+      telefono: client.telefono || '',
+      estado: client.estado || 'ACTIVO'
+    });
+    setIsModalOpen(true);
+  };
+
+  // Guardar (Crear o Editar)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.nombre_razon_social.trim()) return;
 
     setSubmitting(true);
     try {
-      await createClientRecord(formData);
-      setFormData({
-        nombre_razon_social: '',
-        tipo_cliente: 'PERSONA_NATURAL',
-        rut_identificacion: '',
-        email: '',
-        telefono: '',
-        estado: 'ACTIVO'
-      });
+      if (editingId) {
+        await updateClientRecord(editingId, formData);
+      } else {
+        await createClientRecord(formData);
+      }
       setIsModalOpen(false);
-      await loadClients(); // Recargar lista
+      await loadClients(); // Recargar datos
     } catch (err) {
-      alert('Error al registrar el cliente. Verifica los datos o el RUT.');
+      alert('Error al guardar el cliente. Verifica que el RUT no esté duplicado.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Filtrar clientes
+  // Filtrar búsqueda
   const filteredClients = clients.filter(c => 
     c.nombre_razon_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (c.rut_identificacion && c.rut_identificacion.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -77,7 +102,6 @@ export default function ClientesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-10">
-      {/* HEADER DEL MÓDULO */}
       <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-5">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -90,7 +114,7 @@ export default function ClientesPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={openCreateModal}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 transition-colors"
         >
           <UserPlus className="h-4 w-4" />
@@ -98,7 +122,6 @@ export default function ClientesPage() {
         </button>
       </header>
 
-      {/* BARRA DE BÚSQUEDA */}
       <div className="mb-6 flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
         <Search className="h-5 w-5 text-slate-400 ml-2" />
         <input
@@ -110,7 +133,6 @@ export default function ClientesPage() {
         />
       </div>
 
-      {/* TABLA DE CLIENTES */}
       <section className="rounded-xl bg-white shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -121,7 +143,7 @@ export default function ClientesPage() {
                 <th className="px-6 py-3 font-semibold">RUT / ID</th>
                 <th className="px-6 py-3 font-semibold">Contacto</th>
                 <th className="px-6 py-3 font-semibold">Contratos</th>
-                <th className="px-6 py-3 font-semibold">Estado</th>
+                <th className="px-6 py-3 font-semibold text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -166,7 +188,7 @@ export default function ClientesPage() {
                       <div className="space-y-1">
                         {client.email && <div className="flex items-center gap-1.5"><Mail className="h-3 w-3 text-slate-400" /> {client.email}</div>}
                         {client.telefono && <div className="flex items-center gap-1.5"><Phone className="h-3 w-3 text-slate-400" /> {client.telefono}</div>}
-                        {!client.email && !client.telefono && <span className="text-slate-400">Sin contacto</span>}
+                        {!client.email && !client.telefono && <span className="text-slate-400 italic">Sin datos de contacto</span>}
                       </div>
                     </td>
                     <td className="px-6 py-4 font-semibold text-slate-700">
@@ -175,11 +197,13 @@ export default function ClientesPage() {
                         {client.contracts?.length || 0}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                        {client.estado}
-                      </span>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => openEditModal(client)}
+                        className="inline-flex items-center gap-1 rounded bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-blue-100 hover:text-blue-700 transition-colors border border-slate-200 hover:border-blue-300"
+                      >
+                        <Edit className="h-3.5 w-3.5" /> Editar
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -189,12 +213,13 @@ export default function ClientesPage() {
         </div>
       </section>
 
-      {/* MODAL PARA NUEVO CLIENTE */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 p-6">
-              <h3 className="text-lg font-bold text-slate-900">Registrar Nuevo Cliente</h3>
+              <h3 className="text-lg font-bold text-slate-900">
+                {editingId ? 'Editar Cliente' : 'Registrar Nuevo Cliente'}
+              </h3>
               <button 
                 onClick={() => setIsModalOpen(false)}
                 className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
@@ -231,7 +256,7 @@ export default function ClientesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">RUT / Identificación</label>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">RUT / Identificación (Opcional)</label>
                   <input
                     type="text"
                     placeholder="12.345.678-9"
@@ -244,7 +269,7 @@ export default function ClientesPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Correo Electrónico</label>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Correo (Opcional)</label>
                   <input
                     type="email"
                     placeholder="cliente@email.com"
@@ -255,7 +280,7 @@ export default function ClientesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Teléfono</label>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Teléfono (Opcional)</label>
                   <input
                     type="text"
                     placeholder="+56 9 1234 5678"
@@ -265,6 +290,21 @@ export default function ClientesPage() {
                   />
                 </div>
               </div>
+
+              {editingId && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Estado de la cuenta</label>
+                  <select
+                    value={formData.estado}
+                    onChange={(e) => setFormData({...formData, estado: e.target.value})}
+                    className="w-full rounded-lg border border-slate-300 p-2.5 text-sm text-slate-900 outline-none focus:border-blue-600 bg-amber-50"
+                  >
+                    <option value="ACTIVO">Activo</option>
+                    <option value="INACTIVO">Inactivo</option>
+                    <option value="EN_MOROSIDAD">En Morosidad</option>
+                  </select>
+                </div>
+              )}
 
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
                 <button
@@ -279,7 +319,7 @@ export default function ClientesPage() {
                   disabled={submitting}
                   className="rounded-lg bg-blue-900 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
                 >
-                  {submitting ? 'Guardando...' : 'Guardar Cliente'}
+                  {submitting ? 'Guardando...' : editingId ? 'Actualizar Cliente' : 'Crear Cliente'}
                 </button>
               </div>
             </form>

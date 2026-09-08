@@ -40,58 +40,80 @@ export default function ReportesPage() {
   );
   
   const gastosMes = expenses.filter(exp => 
-    exp.fecha_gasto?.startsWith(`${selectedYear}-${mesString}`) && !exp.es_deuda_socio
+    exp.fecha_gasto?.startsWith(`${selectedYear}-${mesString}`)
   );
 
+  // CÁLCULOS MENSUALES GLOBALES Y POR DIVISIÓN
   let ingresosBrutosMes = 0;
   let cajaEmpresaMes = 0;
-  let liquidacionLegalMes = 0;
-  let liquidacionTechMes = 0;
+  let liquidacionLegalBrutaMes = 0;
+  let liquidacionTechBrutaMes = 0;
 
   facturasMes.forEach(inv => {
     const monto = Number(inv.monto_a_cobrar);
-    const pctCaja = Number(inv.contracts?.services?.pct_caja_empresa ?? 30) / 100;
-    const pctLegal = Number(inv.contracts?.services?.pct_ejecutor_legal ?? 70) / 100;
-    const pctTech = Number(inv.contracts?.services?.pct_ejecutor_tech ?? 0) / 100;
+    const pctCaja = Number(inv.contracts?.pct_caja_empresa ?? inv.contracts?.services?.pct_caja_empresa ?? 30) / 100;
+    const pctLegal = Number(inv.contracts?.pct_ejecutor_legal ?? inv.contracts?.services?.pct_ejecutor_legal ?? 70) / 100;
+    const pctTech = Number(inv.contracts?.pct_ejecutor_tech ?? inv.contracts?.services?.pct_ejecutor_tech ?? 0) / 100;
 
     ingresosBrutosMes += monto;
     cajaEmpresaMes += (monto * pctCaja);
-    liquidacionLegalMes += (monto * pctLegal);
-    liquidacionTechMes += (monto * pctTech);
+    liquidacionLegalBrutaMes += (monto * pctLegal);
+    liquidacionTechBrutaMes += (monto * pctTech);
   });
 
-  const totalGastosMes = gastosMes.reduce((acc, g) => acc + Number(g.monto), 0);
-  const balanceNetoMes = cajaEmpresaMes - totalGastosMes;
+  // GASTOS Y RETIROS SEGMENTADOS
+  const gastosOperacionalesMes = gastosMes.filter(g => !g.es_deuda_socio);
+  const totalGastosOpMes = gastosOperacionalesMes.reduce((acc, g) => acc + Number(g.monto), 0);
+  const balanceNetoEmpresaMes = cajaEmpresaMes - totalGastosOpMes;
 
+  const gastosLegalMes = gastosMes.filter(g => g.departamento === 'LEGAL');
+  const gastosTechMes = gastosMes.filter(g => g.departamento === 'TECH');
+
+  const totalGastosLegal = gastosLegalMes.reduce((acc, g) => acc + Number(g.monto), 0);
+  const totalGastosTech = gastosTechMes.reduce((acc, g) => acc + Number(g.monto), 0);
+
+  const liquidoLegalMes = liquidacionLegalBrutaMes - totalGastosLegal;
+  const liquidoTechMes = liquidacionTechBrutaMes - totalGastosTech;
+
+  // CÁLCULOS ANUALES GLOBALES Y POR DIVISIÓN
   const facturasAno = invoices.filter(inv => 
     inv.estado_pago === 'PAGADO' && inv.fecha_pago_real?.startsWith(`${selectedYear}`)
   );
   
   const gastosAno = expenses.filter(exp => 
-    exp.fecha_gasto?.startsWith(`${selectedYear}`) && !exp.es_deuda_socio
+    exp.fecha_gasto?.startsWith(`${selectedYear}`)
   );
 
   let ingresosBrutosAno = 0;
   let cajaEmpresaAno = 0;
-  let liquidacionLegalAno = 0;
-  let liquidacionTechAno = 0;
+  let liquidacionLegalBrutaAno = 0;
+  let liquidacionTechBrutaAno = 0;
 
   facturasAno.forEach(inv => {
     const monto = Number(inv.monto_a_cobrar);
-    const pctCaja = Number(inv.contracts?.services?.pct_caja_empresa ?? 30) / 100;
-    const pctLegal = Number(inv.contracts?.services?.pct_ejecutor_legal ?? 70) / 100;
-    const pctTech = Number(inv.contracts?.services?.pct_ejecutor_tech ?? 0) / 100;
+    const pctCaja = Number(inv.contracts?.pct_caja_empresa ?? inv.contracts?.services?.pct_caja_empresa ?? 30) / 100;
+    const pctLegal = Number(inv.contracts?.pct_ejecutor_legal ?? inv.contracts?.services?.pct_ejecutor_legal ?? 70) / 100;
+    const pctTech = Number(inv.contracts?.pct_ejecutor_tech ?? inv.contracts?.services?.pct_ejecutor_tech ?? 0) / 100;
 
     ingresosBrutosAno += monto;
     cajaEmpresaAno += (monto * pctCaja);
-    liquidacionLegalAno += (monto * pctLegal);
-    liquidacionTechAno += (monto * pctTech);
+    liquidacionLegalBrutaAno += (monto * pctLegal);
+    liquidacionTechBrutaAno += (monto * pctTech);
   });
 
-  const totalGastosAno = gastosAno.reduce((acc, g) => acc + Number(g.monto), 0);
-  const balanceNetoAno = cajaEmpresaAno - totalGastosAno;
+  const gastosOperacionalesAno = gastosAno.filter(g => !g.es_deuda_socio);
+  const totalGastosOpAno = gastosOperacionalesAno.reduce((acc, g) => acc + Number(g.monto), 0);
+  const balanceNetoEmpresaAno = cajaEmpresaAno - totalGastosOpAno;
 
-  // Función genérica para descargar HTML directamente como PDF
+  const gastosLegalAno = gastosAno.filter(g => g.departamento === 'LEGAL');
+  const gastosTechAno = gastosAno.filter(g => g.departamento === 'TECH');
+
+  const totalGastosLegalAno = gastosLegalAno.reduce((acc, g) => acc + Number(g.monto), 0);
+  const totalGastosTechAno = gastosTechAno.reduce((acc, g) => acc + Number(g.monto), 0);
+
+  const liquidoLegalAno = liquidacionLegalBrutaAno - totalGastosLegalAno;
+  const liquidoTechAno = liquidacionTechBrutaAno - totalGastosTechAno;
+
   const descargarPDF = async (htmlContent, nombreArchivo) => {
     const html2pdf = (await import('html2pdf.js')).default;
     const element = document.createElement('div');
@@ -108,7 +130,7 @@ export default function ReportesPage() {
     html2pdf().from(element).set(options).save();
   };
 
-  const generarCierreEmpresaHTML = (titulo, periodo, ingresos, caja, legal, tech, gastos, balanceNeto, desgloseGastos) => `
+  const generarCierreEmpresaHTML = (titulo, periodo, ingresos, caja, liqLegal, liqTech, gastOp, gastLegal, gastTech, netLegal, netTech, netEmpresa, listaGastos) => `
     <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; color: #000; line-height: 1.5; background: #fff;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px;">
         <div style="font-weight: bold; font-size: 16px; letter-spacing: 2px;">SERVICIOS EOS</div>
@@ -117,26 +139,32 @@ export default function ReportesPage() {
           <p style="margin: 3px 0 0; font-size: 11px; color: #666;">${periodo}</p>
         </div>
       </div>
-      <h3 style="font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 4px; margin-top: 20px;">1. Consolidado de Ingresos</h3>
+
+      <h3 style="font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 4px; margin-top: 20px;">1. Resumen Financiero Corporativo Global</h3>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px;">
-        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Total Facturado y Cobrado</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; font-weight: bold;">$${ingresos.toLocaleString('es-CL')} CLP</td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Ingresos Brutos Totales</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; font-weight: bold;">$${ingresos.toLocaleString('es-CL')} CLP</td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Retención Caja Empresa</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace;">$${caja.toLocaleString('es-CL')} CLP</td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; color: #991b1b;">(-) Gastos Operacionales Totales</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; color: #991b1b;">-$${gastOp.toLocaleString('es-CL')} CLP</td></tr>
+        <tr style="background-color: #f9f9f9; font-weight: bold;"><td style="padding: 8px; border-bottom: 1px solid #ddd;">Balance Neto Empresa</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; color: #047857;">$${netEmpresa.toLocaleString('es-CL')} CLP</td></tr>
       </table>
-      <h3 style="font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 4px; margin-top: 20px;">2. Distribución de Utilidades</h3>
+
+      <h3 style="font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 4px; margin-top: 20px;">2. Desglose y Liquidez para Retiros de Socios</h3>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px;">
-        <tr style="background-color: #f9f9f9;"><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: left;">Concepto</th><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">Monto</th></tr>
-        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Fondo Caja Empresa</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; font-weight: bold;">$${caja.toLocaleString('es-CL')} CLP</td></tr>
-        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Liquidación División Legal</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; font-weight: bold;">$${legal.toLocaleString('es-CL')} CLP</td></tr>
-        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Liquidación División Tech</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; font-weight: bold;">$${tech.toLocaleString('es-CL')} CLP</td></tr>
+        <tr style="background-color: #f9f9f9;"><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: left;">División / Socio</th><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">Monto</th></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">Asignación Bruta - División Legal</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace;">$${liqLegal.toLocaleString('es-CL')} CLP</td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; color: #991b1b;">(-) Gastos / Retiros División Legal</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; color: #991b1b;">-$${gastLegal.toLocaleString('es-CL')} CLP</td></tr>
+        <tr style="background-color: #ecfdf5; font-weight: bold;"><td style="padding: 8px; border-bottom: 1px solid #ddd;">Líquido a Retirar - Socio Legal</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; color: #047857;">$${netLegal.toLocaleString('es-CL')} CLP</td></tr>
+
+        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; border-top: 2px solid #ddd;">Asignación Bruta - División Tech</td><td style="padding: 8px; border-bottom: 1px solid #ddd; border-top: 2px solid #ddd; text-align: right; font-family: monospace;">$${liqTech.toLocaleString('es-CL')} CLP</td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #ddd; color: #991b1b;">(-) Gastos / Retiros División Tech</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; color: #991b1b;">-$${gastTech.toLocaleString('es-CL')} CLP</td></tr>
+        <tr style="background-color: #ecfdf5; font-weight: bold;"><td style="padding: 8px; border-bottom: 1px solid #ddd;">Líquido a Retirar - Socio Tech</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; color: #047857;">$${netTech.toLocaleString('es-CL')} CLP</td></tr>
       </table>
-      <h3 style="font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 4px; margin-top: 20px;">3. Egresos Operacionales</h3>
+
+      <h3 style="font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 4px; margin-top: 20px;">3. Detalle de Egresos Operacionales y Socios</h3>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px;">
-        <tr style="background-color: #f9f9f9;"><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: left;">Descripción</th><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">Monto</th></tr>
-        ${desgloseGastos.length > 0 ? desgloseGastos.map(g => `<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">${g.descripcion}</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; font-weight: bold; color: #991b1b;">-$${Number(g.monto).toLocaleString('es-CL')} CLP</td></tr>`).join('') : '<tr><td colspan="2" style="padding: 8px; text-align: center; color: #777;">Sin egresos registrados.</td></tr>'}
+        <tr style="background-color: #f9f9f9;"><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: left;">Descripción</th><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: left;">Área / Tipo</th><th style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">Monto</th></tr>
+        ${listaGastos.length > 0 ? listaGastos.map(g => `<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;">${g.descripcion}</td><td style="padding: 8px; border-bottom: 1px solid #ddd;">${g.departamento} ${g.es_deuda_socio ? '(Retiro Socio)' : ''}</td><td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right; font-family: monospace; color: #991b1b;">-$${Number(g.monto).toLocaleString('es-CL')} CLP</td></tr>`).join('') : '<tr><td colspan="3" style="padding: 8px; text-align: center; color: #777;">Sin registros de egresos.</td></tr>'}
       </table>
-      <div style="border: 2px solid #000; padding: 15px; margin-top: 30px; text-align: center;">
-        <h4 style="margin: 0 0 5px; font-size: 10px; text-transform: uppercase; color: #555;">Balance Neto Empresa</h4>
-        <div style="font-size: 22px; font-weight: bold; font-family: monospace;">$${balanceNeto.toLocaleString('es-CL')} CLP</div>
-      </div>
     </div>
   `;
 
@@ -171,12 +199,12 @@ export default function ReportesPage() {
   const exportarMensual = () => {
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const periodo = `${meses[selectedMonth - 1]} ${selectedYear}`;
-    const html = generarCierreEmpresaHTML('CIERRE CONTABLE MENSUAL', periodo, ingresosBrutosMes, cajaEmpresaMes, liquidacionLegalMes, liquidacionTechMes, totalGastosMes, balanceNetoMes, gastosMes);
+    const html = generarCierreEmpresaHTML('CIERRE CONTABLE MENSUAL', periodo, ingresosBrutosMes, cajaEmpresaMes, liquidacionLegalBrutaMes, liquidacionTechBrutaMes, totalGastosOpMes, totalGastosLegal, totalGastosTech, liquidoLegalMes, liquidoTechMes, balanceNetoEmpresaMes, gastosMes);
     descargarPDF(html, `Cierre_Mensual_${selectedYear}_${selectedMonth}`);
   };
 
   const exportarAnual = () => {
-    const html = generarCierreEmpresaHTML('BALANCE FINANCIERO ANUAL', `Año Fiscal ${selectedYear}`, ingresosBrutosAno, cajaEmpresaAno, liquidacionLegalAno, liquidacionTechAno, totalGastosAno, balanceNetoAno, gastosAno);
+    const html = generarCierreEmpresaHTML('BALANCE FINANCIERO ANUAL', `Año Fiscal ${selectedYear}`, ingresosBrutosAno, cajaEmpresaAno, liquidacionLegalBrutaAno, liquidacionTechBrutaAno, totalGastosOpAno, totalGastosLegalAno, totalGastosTechAno, liquidoLegalAno, liquidoTechAno, balanceNetoEmpresaAno, gastosAno);
     descargarPDF(html, `Balance_Anual_${selectedYear}`);
   };
 
@@ -189,7 +217,7 @@ export default function ReportesPage() {
             Cierres y Reportes Financieros
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Generación de balances corporativos y emisión de comprobantes oficiales
+            Control corporativo global y liquidación neta por divisiones y socios
           </p>
         </div>
 
@@ -224,7 +252,7 @@ export default function ReportesPage() {
             <h3 className="font-bold text-slate-950 flex items-center gap-2">
               <FileText className="h-5 w-5 text-amber-600" /> Cierre Contable Mensual
             </h3>
-            <p className="text-xs text-slate-500 mt-1">Descarga directa en PDF para la administración.</p>
+            <p className="text-xs text-slate-500 mt-1">Descarga directa en PDF con resumen global y por división.</p>
           </div>
           <button 
             onClick={exportarMensual}
@@ -250,12 +278,12 @@ export default function ReportesPage() {
         </div>
       </section>
 
-      {/* VISTA PREVIA RÁPIDA */}
+      {/* VISTA PREVIA RÁPIDA: DATOS GLOBALES Y POR DIVISIÓN */}
       <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-        <TrendingUp className="h-4 w-4 text-amber-600" /> Vista Previa de Caja (Mes Seleccionado)
+        <TrendingUp className="h-4 w-4 text-amber-600" /> Indicadores Globales y Retiros Líquidos (Mes Seleccionado)
       </h2>
       
-      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-10">
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
         <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Ingresos Brutos</p>
           <div className="text-3xl font-extrabold text-slate-950">
@@ -273,15 +301,33 @@ export default function ReportesPage() {
         <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Gastos Operacionales</p>
           <div className="text-3xl font-extrabold text-rose-600">
-            ${totalGastosMes.toLocaleString('es-CL')}
+            ${totalGastosOpMes.toLocaleString('es-CL')}
           </div>
         </div>
 
-        <div className={`rounded-2xl p-6 shadow-sm border ${balanceNetoMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Balance Neto</p>
-          <div className={`text-3xl font-extrabold ${balanceNetoMes >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
-            ${balanceNetoMes.toLocaleString('es-CL')}
+        <div className={`rounded-2xl p-6 shadow-sm border ${balanceNetoEmpresaMes >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">Balance Neto Empresa</p>
+          <div className={`text-3xl font-extrabold ${balanceNetoEmpresaMes >= 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
+            ${balanceNetoEmpresaMes.toLocaleString('es-CL')}
           </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 mb-10">
+        <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 border-l-4 border-l-amber-500">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Líquido a Retirar - Socio Legal</p>
+          <div className="text-3xl font-extrabold text-slate-950">
+            ${liquidoLegalMes.toLocaleString('es-CL')}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">Bruto Legal: ${liquidacionLegalBrutaMes.toLocaleString('es-CL')} | Egresos/Retiros Legal: -${totalGastosLegal.toLocaleString('es-CL')}</p>
+        </div>
+
+        <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200 border-l-4 border-l-indigo-500">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Líquido a Retirar - Socio Tech</p>
+          <div className="text-3xl font-extrabold text-slate-950">
+            ${liquidoTechMes.toLocaleString('es-CL')}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">Bruto Tech: ${liquidacionTechBrutaMes.toLocaleString('es-CL')} | Egresos/Retiros Tech: -${totalGastosTech.toLocaleString('es-CL')}</p>
         </div>
       </section>
 
@@ -305,29 +351,17 @@ export default function ReportesPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-slate-500 text-xs">Cargando registros...</td>
-                </tr>
+                <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500 text-xs">Cargando registros...</td></tr>
               ) : facturasMes.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-slate-500 text-xs">No hay ingresos registrados en este mes.</td>
-                </tr>
+                <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500 text-xs">No hay ingresos registrados en este mes.</td></tr>
               ) : (
                 facturasMes.map((inv) => (
                   <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 text-xs font-semibold text-slate-600">
-                      {inv.fecha_pago_real.split('T')[0]}
-                    </td>
+                    <td className="px-6 py-4 text-xs font-semibold text-slate-600">{inv.fecha_pago_real.split('T')[0]}</td>
                     <td className="px-6 py-4 font-mono font-bold text-amber-700">{inv.folio_interno}</td>
-                    <td className="px-6 py-4 font-bold text-slate-950">
-                      {inv.contracts?.clients?.nombre_razon_social || 'Cliente'}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-slate-500">
-                      {inv.contracts?.services?.nombre_servicio || 'Servicio'}
-                    </td>
-                    <td className="px-6 py-4 font-extrabold text-emerald-700">
-                      ${Number(inv.monto_a_cobrar).toLocaleString('es-CL')}
-                    </td>
+                    <td className="px-6 py-4 font-bold text-slate-950">{inv.contracts?.clients?.nombre_razon_social || 'Cliente'}</td>
+                    <td className="px-6 py-4 text-xs text-slate-500">{inv.contracts?.services?.nombre_servicio || 'Servicio'}</td>
+                    <td className="px-6 py-4 font-extrabold text-emerald-700">${Number(inv.monto_a_cobrar).toLocaleString('es-CL')}</td>
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => {

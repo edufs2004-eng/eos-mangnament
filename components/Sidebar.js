@@ -30,7 +30,7 @@ export default function Sidebar() {
         <img src="/logo_eos.png" alt="Servicios EOS" className="h-9 w-9 object-contain" />
         <div>
           <span className="font-extrabold text-white tracking-widest text-sm block">SERVICIOS EOS</span>
-          <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">Management v2.0</span>
+          <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider">Management v2.0.1</span>
         </div>
       </div>
 

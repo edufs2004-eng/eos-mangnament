@@ -6,13 +6,12 @@ import {
   CheckCircle2, 
   Clock, 
   Search, 
-  Check, 
   X, 
   FileCheck2,
   Edit,
   AlertCircle,
   UploadCloud,
-  Image as ImageIcon,
+  ImageIcon,
   ExternalLink
 } from 'lucide-react';
 import { 
@@ -30,24 +29,20 @@ export default function CobrosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('TODOS');
   
-  // Modales
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [editingInvoice, setEditingInvoice] = useState(null);
-  const [receiptInvoice, setReceiptInvoice] = useState(null); // Nuevo modal para adjuntar a pagos antiguos
+  const [receiptInvoice, setReceiptInvoice] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   
-  // Campos del Formulario de Pago
   const [fechaPagoReal, setFechaPagoReal] = useState('');
   const [valorUfDia, setValorUfDia] = useState('');
   const [montoManualCLP, setMontoManualCLP] = useState('');
-  const [comprobanteFile, setComprobanteFile] = useState(null); // Archivo físico
+  const [comprobanteFile, setComprobanteFile] = useState(null);
   
-  // Pago Parcial
   const [esPagoParcial, setEsPagoParcial] = useState(false);
   const [montoParcialAbonado, setMontoParcialAbonado] = useState('');
 
-  // Campos Formulario Edición
   const [editData, setEditData] = useState({
     fecha_vencimiento: '',
     monto_a_cobrar: ''
@@ -67,9 +62,6 @@ export default function CobrosPage() {
     loadInvoices();
   }, []);
 
-  // ==========================================
-  // LÓGICA DE EDICIÓN DE FECHA/MONTO
-  // ==========================================
   const openEditModal = (inv) => {
     setEditingInvoice(inv);
     setEditData({
@@ -82,10 +74,31 @@ export default function CobrosPage() {
     e.preventDefault();
     setConfirming(true);
     try {
+      // 🛠️ CORRECCIÓN: Obtener la fecha actual en formato local 'YYYY-MM-DD' de forma exacta
+      const ahora = new Date();
+      const year = ahora.getFullYear();
+      const month = String(ahora.getMonth() + 1).padStart(2, '0');
+      const day = String(ahora.getDate()).padStart(2, '0');
+      const hoyString = `${year}-${month}-${day}`;
+
+      let nuevoEstado = editingInvoice.estado_pago;
+
+      if (nuevoEstado !== 'PAGADO') {
+        // Transformamos ambas fechas a números enteros (ej: '2026-06-05' -> 20260605) 
+        // para hacer una comparación matemática infalible sin problemas de zona horaria.
+        const numVencimiento = parseInt(editData.fecha_vencimiento.replace(/-/g, ''), 10);
+        const numHoy = parseInt(hoyString.replace(/-/g, ''), 10);
+
+        // Si la fecha de vencimiento es menor (anterior) a hoy, queda en ATRASADO. Si es igual o mayor, queda en PENDIENTE.
+        nuevoEstado = numVencimiento < numHoy ? 'ATRASADO' : 'PENDIENTE';
+      }
+
       await updateInvoiceRecord(editingInvoice.id, {
         fecha_vencimiento: editData.fecha_vencimiento,
-        monto_a_cobrar: parseFloat(editData.monto_a_cobrar)
+        monto_a_cobrar: parseFloat(editData.monto_a_cobrar),
+        estado_pago: nuevoEstado
       });
+
       setEditingInvoice(null);
       await loadInvoices();
     } catch (err) {
@@ -93,14 +106,6 @@ export default function CobrosPage() {
     } finally {
       setConfirming(false);
     }
-  };
-
-  // ==========================================
-  // LÓGICA DE COMPROBANTES (PAGOS ANTIGUOS)
-  // ==========================================
-  const openReceiptModal = (inv) => {
-    setReceiptInvoice(inv);
-    setComprobanteFile(null);
   };
 
   const handleUpdateReceipt = async (e) => {
@@ -121,9 +126,6 @@ export default function CobrosPage() {
     }
   };
 
-  // ==========================================
-  // LÓGICA DE LIQUIDACIÓN Y PAGO PARCIAL
-  // ==========================================
   const openConfirmModal = (inv) => {
     setSelectedInvoice(inv);
     setComprobanteFile(null);
@@ -166,10 +168,8 @@ export default function CobrosPage() {
 
     setConfirming(true);
     try {
-      // 1. Subir el archivo y obtener URL
       const publicUrl = await uploadComprobante(comprobanteFile);
 
-      // 2. Procesar el pago con la URL del archivo
       if (esPagoParcial) {
         await registerPartialPayment({
           invoiceId: selectedInvoice.id,
@@ -212,10 +212,10 @@ export default function CobrosPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-10">
+    <div className="min-h-screen bg-[#f8fafc] p-6 md:p-10 text-slate-900">
       <header className="mb-8 border-b border-slate-200 pb-5">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <Receipt className="h-6 w-6 text-blue-900" />
+        <h1 className="text-2xl font-extrabold text-slate-950 tracking-tight flex items-center gap-2">
+          <Receipt className="h-6 w-6 text-amber-600" />
           Control de Cobros & Facturación
         </h1>
         <p className="text-xs text-slate-500 mt-1">
@@ -224,7 +224,7 @@ export default function CobrosPage() {
       </header>
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex-1">
+        <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-1">
           <Search className="h-5 w-5 text-slate-400 ml-2" />
           <input
             type="text"
@@ -235,15 +235,15 @@ export default function CobrosPage() {
           />
         </div>
 
-        <div className="flex items-center bg-white rounded-xl border border-slate-200 p-1 shadow-sm text-xs font-semibold overflow-x-auto">
+        <div className="flex items-center bg-white rounded-2xl border border-slate-200 p-1 shadow-sm text-xs font-bold overflow-x-auto">
           {['TODOS', 'PENDIENTE', 'ATRASADO', 'PAGADO'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-3 py-2 rounded-lg transition-colors whitespace-nowrap ${
+              className={`px-3 py-2 rounded-xl transition-colors whitespace-nowrap ${
                 statusFilter === status 
-                  ? status === 'ATRASADO' ? 'bg-rose-700 text-white' : 'bg-blue-900 text-white' 
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? status === 'ATRASADO' ? 'bg-rose-600 text-white' : 'bg-slate-950 text-amber-400' 
+                  : 'text-slate-600 hover:text-slate-950'
               }`}
             >
               {status}
@@ -252,7 +252,7 @@ export default function CobrosPage() {
         </div>
       </div>
 
-      <section className="rounded-xl bg-white shadow-sm border border-slate-200 overflow-hidden">
+      <section className="rounded-2xl bg-white shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
@@ -283,28 +283,28 @@ export default function CobrosPage() {
 
                   return (
                     <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-6 py-4 font-mono font-bold text-slate-800">{inv.folio_interno}</td>
-                      <td className="px-6 py-4 font-semibold text-slate-900">
+                      <td className="px-6 py-4 font-mono font-bold text-slate-950">{inv.folio_interno}</td>
+                      <td className="px-6 py-4 font-bold text-slate-950">
                         {inv.contracts?.clients?.nombre_razon_social || 'Desconocido'}
                         <span className="block text-xs font-normal text-slate-500">{inv.contracts?.services?.nombre_servicio}</span>
                       </td>
-                      <td className="px-6 py-4 font-bold text-slate-900">
-                        <span className={`px-2 py-1 rounded-md text-xs border ${moneda === 'UF' ? 'bg-indigo-50 text-indigo-700' : 'bg-transparent'}`}>
+                      <td className="px-6 py-4 font-bold text-slate-950">
+                        <span className={`px-2 py-1 rounded-md text-xs border ${moneda === 'UF' ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-transparent'}`}>
                           {displayMonto}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-xs font-medium text-slate-600">{inv.fecha_vencimiento}</td>
+                      <td className="px-6 py-4 text-xs font-semibold text-slate-600">{inv.fecha_vencimiento}</td>
                       <td className="px-6 py-4">
                         {uiStatus === 'PAGADO' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
                             <CheckCircle2 className="h-3.5 w-3.5" /> Pagado
                           </span>
                         ) : uiStatus === 'ATRASADO' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700 border border-rose-200">
                             <AlertCircle className="h-3.5 w-3.5" /> Atrasado
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-800 border border-amber-200">
                             <Clock className="h-3.5 w-3.5" /> Pendiente
                           </span>
                         )}
@@ -312,15 +312,15 @@ export default function CobrosPage() {
                       <td className="px-6 py-4 text-right">
                         {(uiStatus === 'PENDIENTE' || uiStatus === 'ATRASADO') ? (
                           <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => openEditModal(inv)} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-blue-600 border border-transparent hover:border-slate-200 transition-all">
+                            <button onClick={() => openEditModal(inv)} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-600 border border-transparent hover:border-slate-200 transition-all">
                               <Edit className="h-4 w-4" />
                             </button>
-                            <button onClick={() => openConfirmModal(inv)} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors">
+                            <button onClick={() => openConfirmModal(inv)} className="inline-flex items-center gap-1 rounded-xl bg-slate-950 px-3 py-1.5 text-xs font-bold text-amber-400 shadow-sm hover:bg-slate-900 transition-colors">
                               <FileCheck2 className="h-3.5 w-3.5" /> Liquidar
                             </button>
                           </div>
                         ) : (
-                          <button onClick={() => openReceiptModal(inv)} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200">
+                          <button onClick={() => openReceiptModal(inv)} className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors border border-slate-200">
                             <ImageIcon className="h-3.5 w-3.5" /> Comprobante
                           </button>
                         )}
@@ -336,37 +336,38 @@ export default function CobrosPage() {
 
       {/* MODAL 1: EDITAR CUOTA */}
       {editingInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 p-6 bg-slate-50">
-              <h3 className="text-lg font-bold text-slate-900">Editar Cuota</h3>
+              <h3 className="text-lg font-bold text-slate-950">Editar Cuota</h3>
               <button onClick={() => setEditingInvoice(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-200"><X className="h-5 w-5" /></button>
             </div>
             <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Fecha de Vencimiento</label>
-                <input type="date" required value={editData.fecha_vencimiento} onChange={(e) => setEditData({...editData, fecha_vencimiento: e.target.value})} className="w-full rounded-lg border p-2.5 text-sm" />
+                <input type="date" required value={editData.fecha_vencimiento} onChange={(e) => setEditData({...editData, fecha_vencimiento: e.target.value})} className="w-full rounded-xl border p-2.5 text-sm" />
+                <p className="text-[10px] text-slate-400 mt-1">Al cambiar la fecha, el estado se ajustará automáticamente a Pendiente o Atrasado.</p>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Monto de esta cuota</label>
-                <input type="number" step="any" required value={editData.monto_a_cobrar} onChange={(e) => setEditData({...editData, monto_a_cobrar: e.target.value})} className="w-full rounded-lg border p-2.5 text-sm font-bold" />
+                <input type="number" step="any" required value={editData.monto_a_cobrar} onChange={(e) => setEditData({...editData, monto_a_cobrar: e.target.value})} className="w-full rounded-xl border p-2.5 text-sm font-bold" />
               </div>
               <div className="pt-4 flex justify-end gap-3 border-t">
                 <button type="button" onClick={() => setEditingInvoice(null)} className="text-sm font-semibold text-slate-600 px-4">Cancelar</button>
-                <button type="submit" disabled={confirming} className="bg-blue-900 text-white px-5 py-2 rounded-lg text-sm font-semibold">Guardar</button>
+                <button type="submit" disabled={confirming} className="bg-slate-950 text-amber-400 px-5 py-2 rounded-xl text-sm font-bold">Guardar</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: AÑADIR/EDITAR COMPROBANTE A PAGOS ANTIGUOS */}
+      {/* MODAL 2: COMPROBANTE ANTIGUO */}
       {receiptInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 p-6 bg-slate-50">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Comprobante de Pago</h3>
+                <h3 className="text-lg font-bold text-slate-950">Comprobante de Pago</h3>
                 <p className="text-xs text-slate-500 font-mono mt-0.5">{receiptInvoice.folio_interno}</p>
               </div>
               <button onClick={() => setReceiptInvoice(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-200"><X className="h-5 w-5" /></button>
@@ -374,14 +375,14 @@ export default function CobrosPage() {
             
             <form onSubmit={handleUpdateReceipt} className="p-6 space-y-4">
               {receiptInvoice.comprobante_url ? (
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
                   <span className="text-sm font-semibold text-emerald-800">Ya existe un comprobante</span>
                   <a href={receiptInvoice.comprobante_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:underline">
                     Ver Archivo <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
               ) : (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm font-semibold text-amber-800">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm font-semibold text-amber-900">
                   Este pago antiguo no tiene comprobante adjunto.
                 </div>
               )}
@@ -397,7 +398,7 @@ export default function CobrosPage() {
                 />
                 <div 
                   onClick={() => editFileInputRef.current.click()}
-                  className="w-full border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:bg-slate-50 hover:border-blue-400 transition-colors"
+                  className="w-full border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center cursor-pointer hover:bg-slate-50 hover:border-amber-500 transition-colors"
                 >
                   <UploadCloud className="h-8 w-8 text-slate-400 mx-auto mb-2" />
                   <span className="text-sm font-semibold text-slate-700 block">
@@ -408,7 +409,7 @@ export default function CobrosPage() {
 
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={() => setReceiptInvoice(null)} className="px-4 py-2 text-sm font-semibold text-slate-600">Cerrar</button>
-                <button type="submit" disabled={uploadingFile || !comprobanteFile} className="bg-blue-900 text-white px-5 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 flex items-center gap-2">
+                <button type="submit" disabled={uploadingFile || !comprobanteFile} className="bg-slate-950 text-amber-400 px-5 py-2 rounded-xl text-sm font-bold disabled:opacity-50">
                   {uploadingFile ? 'Subiendo...' : 'Guardar Comprobante'}
                 </button>
               </div>
@@ -419,18 +420,17 @@ export default function CobrosPage() {
 
       {/* MODAL 3: CONFIRMAR PAGO NUEVO */}
       {selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 p-6 bg-slate-50">
               <div>
-                <h3 className="text-lg font-bold text-slate-900">Liquidar Ingreso</h3>
+                <h3 className="text-lg font-bold text-slate-950">Liquidar Ingreso</h3>
                 <p className="text-xs text-slate-500 font-mono mt-0.5">{selectedInvoice.folio_interno}</p>
               </div>
               <button onClick={() => setSelectedInvoice(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-200"><X className="h-5 w-5" /></button>
             </div>
 
             <form onSubmit={handleConfirmPayment} className="p-6 space-y-4">
-              {/* SUBIDA DE ARCHIVO OBLIGATORIA */}
               <div>
                 <label className="block text-xs font-semibold text-rose-600 uppercase mb-2">Comprobante de Pago * (Obligatorio)</label>
                 <input 
@@ -443,50 +443,48 @@ export default function CobrosPage() {
                 />
                 <div 
                   onClick={() => fileInputRef.current.click()}
-                  className={`w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${comprobanteFile ? 'border-emerald-400 bg-emerald-50' : 'border-rose-300 bg-rose-50 hover:bg-rose-100'}`}
+                  className={`w-full border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-colors ${comprobanteFile ? 'border-emerald-400 bg-emerald-50' : 'border-rose-300 bg-rose-50 hover:bg-rose-100'}`}
                 >
                   <UploadCloud className={`h-6 w-6 mx-auto mb-1 ${comprobanteFile ? 'text-emerald-500' : 'text-rose-400'}`} />
-                  <span className={`text-xs font-semibold block ${comprobanteFile ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  <span className={`text-xs font-bold block ${comprobanteFile ? 'text-emerald-700' : 'text-rose-700'}`}>
                     {comprobanteFile ? comprobanteFile.name : 'Haz clic para subir la transferencia'}
                   </span>
                 </div>
               </div>
 
-              {/* OPCIÓN PAGO PARCIAL */}
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mt-2">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl mt-2">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={esPagoParcial} onChange={(e) => { setEsPagoParcial(e.target.checked); if (!e.target.checked) setMontoParcialAbonado(''); }} className="h-4 w-4 rounded text-blue-900" />
-                  <span className="text-sm font-bold text-blue-950">El cliente hizo un Abono Parcial</span>
+                  <input type="checkbox" checked={esPagoParcial} onChange={(e) => { setEsPagoParcial(e.target.checked); if (!e.target.checked) setMontoParcialAbonado(''); }} className="h-4 w-4 rounded text-amber-600" />
+                  <span className="text-xs font-bold text-amber-950">El cliente hizo un Abono Parcial</span>
                 </label>
                 {esPagoParcial && (
                   <div className="mt-3">
-                    <label className="block text-[10px] font-bold text-blue-900 uppercase mb-1">¿Cuánto abonó en {selectedInvoice.contracts?.moneda}?</label>
-                    <input type="number" step="any" required={esPagoParcial} value={montoParcialAbonado} onChange={(e) => setMontoParcialAbonado(e.target.value)} className="w-full rounded border border-blue-300 p-2 text-sm bg-white" />
+                    <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">¿Cuánto abonó en {selectedInvoice.contracts?.moneda}?</label>
+                    <input type="number" step="any" required={esPagoParcial} value={montoParcialAbonado} onChange={(e) => setMontoParcialAbonado(e.target.value)} className="w-full rounded-xl border border-amber-300 p-2 text-sm bg-white" />
                   </div>
                 )}
               </div>
 
-              {/* CONVERSIONES UF/% */}
               {selectedInvoice.contracts?.moneda === 'UF' && (
-                <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Valor UF del día *</label><input type="number" step="any" required value={valorUfDia} onChange={(e) => setValorUfDia(e.target.value)} className="w-full rounded-lg border p-2.5 text-sm" /></div>
+                <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Valor UF del día *</label><input type="number" step="any" required value={valorUfDia} onChange={(e) => setValorUfDia(e.target.value)} className="w-full rounded-xl border p-2.5 text-sm" /></div>
               )}
               {selectedInvoice.contracts?.moneda === 'PORCENTAJE' && (
-                <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Total ganado (CLP) *</label><input type="number" step="any" required value={montoManualCLP} onChange={(e) => setMontoManualCLP(e.target.value)} className="w-full rounded-lg border p-2.5 text-sm" /></div>
+                <div><label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Total ganado (CLP) *</label><input type="number" step="any" required value={montoManualCLP} onChange={(e) => setMontoManualCLP(e.target.value)} className="w-full rounded-xl border p-2.5 text-sm" /></div>
               )}
 
-              <div className="rounded-xl bg-slate-900 p-4 shadow-inner text-white flex items-center justify-between">
+              <div className="rounded-2xl bg-[#090d16] p-4 shadow-inner text-white flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase text-slate-300">CLP a Repartir</span>
-                <span className="text-xl font-bold">${getMontoFinalCalculado().toLocaleString('es-CL')}</span>
+                <span className="text-xl font-bold text-amber-400">${getMontoFinalCalculado().toLocaleString('es-CL')}</span>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Fecha Real de Ingreso</label>
-                <input type="date" required value={fechaPagoReal} onChange={(e) => setFechaPagoReal(e.target.value)} className="w-full rounded-lg border p-2.5 text-sm" />
+                <input type="date" required value={fechaPagoReal} onChange={(e) => setFechaPagoReal(e.target.value)} className="w-full rounded-xl border p-2.5 text-sm" />
               </div>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={() => setSelectedInvoice(null)} className="px-4 py-2 text-sm font-semibold text-slate-600">Cancelar</button>
-                <button type="submit" disabled={confirming || getMontoFinalCalculado() <= 0} className="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
+                <button type="submit" disabled={confirming || getMontoFinalCalculado() <= 0} className="bg-slate-950 text-amber-400 px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 disabled:opacity-50">
                   {confirming ? 'Subiendo...' : 'Confirmar Ingreso'}
                 </button>
               </div>

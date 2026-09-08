@@ -43,29 +43,6 @@ export async function getClients() {
     return [];
   }
 }
-
-// Crear un nuevo cliente (Maneja RUT opcional correctamente)
-export async function createClientRecord(clientData) {
-  try {
-    const payload = { ...clientData };
-    // Si el RUT está vacío, lo pasamos como null para evitar errores de restricción única
-    if (payload.rut_identificacion === '') {
-      payload.rut_identificacion = null;
-    }
-
-    const { data, error } = await supabase
-      .from('clients')
-      .insert([payload])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('Error al crear cliente:', err);
-    throw err;
-  }
-}
 // Obtener lista de egresos y deudas asociadas
 export async function getExpenses() {
   try {
@@ -158,28 +135,6 @@ export async function createServiceRecord(serviceData) {
     throw err;
   }
 }
-// Actualizar un cliente existente
-export async function updateClientRecord(id, clientData) {
-  try {
-    const payload = { ...clientData };
-    if (payload.rut_identificacion === '') {
-      payload.rut_identificacion = null;
-    }
-
-    const { data, error } = await supabase
-      .from('clients')
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.error('Error al actualizar cliente:', err);
-    throw err;
-  }
-}
 // Obtener todos los cobros con información de cliente, servicio y moneda
 export async function getInvoices() {
   try {
@@ -237,6 +192,59 @@ export async function confirmInvoicePayment({ invoiceId, comprobanteUrl, fechaPa
     return data;
   } catch (err) {
     console.error('Error al confirmar pago:', err);
+    throw err;
+  }
+}
+// Función auxiliar para limpiar payload de cliente
+const sanitizeClientData = (data) => {
+  const payload = { ...data };
+  
+  // Si el RUT viene vacío o con espacios, forzar NULL explícito
+  if (!payload.rut_identificacion || payload.rut_identificacion.trim() === '') {
+    payload.rut_identificacion = null;
+  } else {
+    payload.rut_identificacion = payload.rut_identificacion.trim();
+  }
+
+  if (payload.email && payload.email.trim() === '') payload.email = null;
+  if (payload.telefono && payload.telefono.trim() === '') payload.telefono = null;
+
+  return payload;
+};
+
+// Crear cliente
+export async function createClientRecord(clientData) {
+  try {
+    const payload = sanitizeClientData(clientData);
+    const { data, error } = await supabase
+      .from('clients')
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al crear cliente:', err);
+    throw err;
+  }
+}
+
+// Actualizar cliente
+export async function updateClientRecord(id, clientData) {
+  try {
+    const payload = sanitizeClientData(clientData);
+    const { data, error } = await supabase
+      .from('clients')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al actualizar cliente:', err);
     throw err;
   }
 }

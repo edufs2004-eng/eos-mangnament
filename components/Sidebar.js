@@ -15,6 +15,7 @@ const menuItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Clientes (CRM)', href: '/clientes', icon: Users },
   { name: 'Servicios', href: '/servicios', icon: Briefcase },
+  { name: 'Personal & Nómina', href: '/personal', icon: Users },
   { name: 'Cobros y Boletas', href: '/cobros', icon: Receipt },
   { name: 'Gastos y Deudas', href: '/gastos', icon: CreditCard },
   { name: 'Reportes y Cierres', href: '/reportes', icon: BarChart3 },

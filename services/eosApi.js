@@ -434,3 +434,33 @@ export async function updateComprobanteUrl(invoiceId, url) {
     throw err;
   }
 }
+// Funciones para Gestión de Personal y Nómina
+export async function getPayrollStaff() {
+  const { data, error } = await supabase
+    .from('payroll_staff')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error fetching payroll staff:', error);
+    return [];
+  }
+  return data;
+}
+
+export async function createPayrollStaff(staffData) {
+  const { data, error } = await supabase
+    .from('payroll_staff')
+    .insert([staffData])
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+export async function deletePayrollStaff(id) {
+  const { error } = await supabase
+    .from('payroll_staff')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+  return true;
+}

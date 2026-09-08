@@ -391,3 +391,46 @@ export async function registerPartialPayment({ invoiceId, montoFinalClp, montoRe
     throw err;
   }
 }
+// Subir archivo (Imagen o PDF) a Supabase Storage
+export async function uploadComprobante(file) {
+  try {
+    const fileExt = file.name.split('.').pop();
+    // Generar un nombre único para no sobreescribir archivos con el mismo nombre
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `recibos/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('comprobantes')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    // Obtener la URL pública para guardarla en la base de datos
+    const { data } = supabase.storage
+      .from('comprobantes')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  } catch (err) {
+    console.error('Error al subir comprobante:', err);
+    throw err;
+  }
+}
+
+// Actualizar solo el comprobante de un pago antiguo
+export async function updateComprobanteUrl(invoiceId, url) {
+  try {
+    const { data, error } = await supabase
+      .from('invoices_receipts')
+      .update({ comprobante_url: url })
+      .eq('id', invoiceId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error al actualizar url del comprobante:', err);
+    throw err;
+  }
+}

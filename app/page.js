@@ -48,8 +48,11 @@ export default function DashboardPage() {
           }
         });
 
+        // FILTRO: Solo contamos clientes en estado ACTIVO para la métrica del Dashboard
+        const clientesActivosCount = clients.filter(c => c.estado === 'ACTIVO').length;
+
         setStats({
-          clientsCount: clients.length,
+          clientsCount: clientesActivosCount,
           servicesCount: services.length,
           pendingInvoicesTotal: pendingTotal,
           monthlyIncome: incomeTotal,
@@ -100,7 +103,7 @@ export default function DashboardPage() {
           <div className="text-3xl font-extrabold text-slate-950">
             {stats.loading ? '...' : stats.clientsCount}
           </div>
-          <p className="text-[10px] text-slate-500 font-medium mt-2">Empresas y personas registradas</p>
+          <p className="text-[10px] text-slate-500 font-medium mt-2">Empresas y personas operativas</p>
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-200/80">

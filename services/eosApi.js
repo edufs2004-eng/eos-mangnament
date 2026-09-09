@@ -43,6 +43,7 @@ export async function getClients() {
     return [];
   }
 }
+
 // Obtener lista de egresos y deudas asociadas
 export async function getExpenses() {
   try {
@@ -100,6 +101,7 @@ export async function createExpenseRecord(expenseData) {
     throw err;
   }
 }
+
 // Obtener el catálogo completo de servicios
 export async function getServices() {
   try {
@@ -135,13 +137,12 @@ export async function createServiceRecord(serviceData) {
     throw err;
   }
 }
+
 // Obtener todos los cobros con información de cliente, servicio y moneda
 export async function getInvoices() {
   try {
-    // 1. EJECUTAR EL DETECTOR DE MOROSIDAD ANTES DE TRAER LOS DATOS
     await supabase.rpc('actualizar_morosidades');
 
-    // 2. AHORA SÍ, TRAER LOS DATOS ACTUALIZADOS
     const { data, error } = await supabase
       .from('invoices_receipts')
       .select(`
@@ -170,16 +171,40 @@ export async function getInvoices() {
 // Confirmar pago (Soporta UF, Porcentajes y Fechas Retroactivas)
 export async function confirmInvoicePayment({ invoiceId, comprobanteUrl, fechaPagoReal, montoFinalClp, valorUfDia }) {
   try {
+    const { data: inv, error: invError } = await supabase
+      .from('invoices_receipts')
+      .select(`
+        *,
+        contracts (
+          *,
+          services (*)
+        )
+      `)
+      .eq('id', invoiceId)
+      .single();
+
+    if (invError) throw invError;
+
+    const montoReal = montoFinalClp !== null && montoFinalClp !== undefined ? Number(montoFinalClp) : Number(inv.monto_a_cobrar);
+    const contract = inv.contracts || {};
+    const service = contract.services || {};
+
+    const pctCaja = Number(contract.pct_caja_empresa ?? service.pct_caja_empresa ?? 30);
+    const pctLegal = Number(contract.pct_ejecutor_legal ?? service.pct_ejecutor_legal ?? 70);
+    const pctTech = Number(contract.pct_ejecutor_tech ?? service.pct_ejecutor_tech ?? 0);
+
+    const montoCaja = montoReal * (pctCaja / 100);
+    const montoLegal = montoReal * (pctLegal / 100);
+    const montoTech = montoReal * (pctTech / 100);
+
     const payload = {
       estado_pago: 'PAGADO',
-      fecha_pago_real: fechaPagoReal, // Fecha seleccionada por el usuario
+      fecha_pago_real: fechaPagoReal,
       comprobante_url: comprobanteUrl || null
     };
 
-    // Si hubo conversión (UF o Porcentaje), actualizamos el monto_a_cobrar a pesos chilenos reales
-    // para que el Trigger SQL calcule el 30/70 sobre dinero real.
-    if (montoFinalClp !== null) {
-      payload.monto_a_cobrar = montoFinalClp;
+    if (montoFinalClp !== null && montoFinalClp !== undefined) {
+      payload.monto_a_cobrar = montoReal;
     }
     if (valorUfDia) {
       payload.valor_uf_dia = valorUfDia;
@@ -192,18 +217,52 @@ export async function confirmInvoicePayment({ invoiceId, comprobanteUrl, fechaPa
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error de Supabase al confirmar pago:", error);
+      alert("Error al actualizar la base de datos: " + error.message);
+      throw error;
+    }
+
+    const { data: existingSplit } = await supabase
+      .from('ledger_split')
+      .select('id')
+      .eq('invoice_id', invoiceId)
+      .maybeSingle();
+
+    if (existingSplit) {
+      await supabase
+        .from('ledger_split')
+        .update({
+          monto_total_recibido: montoReal,
+          monto_caja_empresa: montoCaja,
+          monto_modulo_legal: montoLegal,
+          monto_modulo_tech: montoTech
+        })
+        .eq('invoice_id', invoiceId);
+    } else {
+      await supabase
+        .from('ledger_split')
+        .insert([{
+          invoice_id: invoiceId,
+          monto_total_recibido: montoReal,
+          monto_caja_empresa: montoCaja,
+          monto_modulo_legal: montoLegal,
+          monto_modulo_tech: montoTech,
+          estado_liquidacion: 'RETENIDO_EN_CAJA'
+        }]);
+    }
+
     return data;
   } catch (err) {
     console.error('Error al confirmar pago:', err);
     throw err;
   }
 }
+
 // Función auxiliar para limpiar payload de cliente
 const sanitizeClientData = (data) => {
   const payload = { ...data };
   
-  // Si el RUT viene vacío o con espacios, forzar NULL explícito
   if (!payload.rut_identificacion || payload.rut_identificacion.trim() === '') {
     payload.rut_identificacion = null;
   } else {
@@ -252,6 +311,7 @@ export async function updateClientRecord(id, clientData) {
     throw err;
   }
 }
+
 // Crear un contrato y generar sus cuotas/boletas automáticamente
 export async function createContractAndInvoices({
   client_id,
@@ -266,7 +326,6 @@ export async function createContractAndInvoices({
   valor_uf_dia = null
 }) {
   try {
-    // 1. Insertar el contrato
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
       .insert([{
@@ -283,7 +342,6 @@ export async function createContractAndInvoices({
 
     if (contractError) throw contractError;
 
-    // 2. Generar las cuotas/boletas automáticamente
     const numCuotas = tipo_pago === 'UNICO' ? 1 : parseInt(numero_cuotas);
     const montoCuotaBase = parseFloat(monto_total_acordado) / numCuotas;
     const timestampFolio = Date.now().toString().slice(-4);
@@ -296,7 +354,6 @@ export async function createContractAndInvoices({
 
       const esPrimeraPagada = i === 1 && marcar_primer_pago_pagado;
       
-      // Si es en UF y se marcó pagada, calculamos los CLP reales para la repartición 30/70
       let montoCuotaFinal = montoCuotaBase;
       if (esPrimeraPagada && moneda === 'UF' && valor_uf_dia) {
         montoCuotaFinal = montoCuotaBase * parseFloat(valor_uf_dia);
@@ -327,6 +384,7 @@ export async function createContractAndInvoices({
     throw err;
   }
 }
+
 // Actualizar datos de una cuota (Ej: Cambiar fecha de vencimiento manual)
 export async function updateInvoiceRecord(invoiceId, updates) {
   try {
@@ -348,7 +406,6 @@ export async function updateInvoiceRecord(invoiceId, updates) {
 // Procesar un Pago Parcial (Liquida una parte y crea una nueva deuda por el saldo)
 export async function registerPartialPayment({ invoiceId, montoFinalClp, montoRestanteBase, comprobanteUrl, fechaPagoReal, valorUfDia }) {
   try {
-    // 1. Obtener la boleta original
     const { data: originalInvoice, error: fetchError } = await supabase
       .from('invoices_receipts')
       .select('*')
@@ -357,7 +414,6 @@ export async function registerPartialPayment({ invoiceId, montoFinalClp, montoRe
       
     if (fetchError) throw fetchError;
 
-    // 2. Liquidar la boleta actual con el monto parcial que SÍ pagaron
     const { error: updateError } = await supabase
       .from('invoices_receipts')
       .update({
@@ -371,14 +427,13 @@ export async function registerPartialPayment({ invoiceId, montoFinalClp, montoRe
       
     if (updateError) throw updateError;
 
-    // 3. Crear automáticamente una nueva boleta PENDIENTE por el saldo que falta
     const { error: insertError } = await supabase
       .from('invoices_receipts')
       .insert([{
         contract_id: originalInvoice.contract_id,
         folio_interno: originalInvoice.folio_interno + '-SALDO',
         numero_cuota_actual: originalInvoice.numero_cuota_actual,
-        monto_a_cobrar: montoRestanteBase, // El remanente en moneda original (CLP o UF)
+        monto_a_cobrar: montoRestanteBase,
         fecha_vencimiento: originalInvoice.fecha_vencimiento, 
         estado_pago: 'PENDIENTE'
       }]);
@@ -391,11 +446,11 @@ export async function registerPartialPayment({ invoiceId, montoFinalClp, montoRe
     throw err;
   }
 }
+
 // Subir archivo (Imagen o PDF) a Supabase Storage
 export async function uploadComprobante(file) {
   try {
     const fileExt = file.name.split('.').pop();
-    // Generar un nombre único para no sobreescribir archivos con el mismo nombre
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `recibos/${fileName}`;
 
@@ -405,7 +460,6 @@ export async function uploadComprobante(file) {
 
     if (uploadError) throw uploadError;
 
-    // Obtener la URL pública para guardarla en la base de datos
     const { data } = supabase.storage
       .from('comprobantes')
       .getPublicUrl(filePath);

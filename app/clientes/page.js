@@ -19,6 +19,7 @@ import { getClients, createClientRecord, updateClientRecord, getServices, create
 
 export default function ClientesPage() {
   const [clients, setClients] = useState([]);
+  const [activeTab, setActiveTab] = useState('ACTIVO');
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -158,10 +159,13 @@ export default function ClientesPage() {
     }
   };
 
-  const filteredClients = clients.filter(c => 
-    c.nombre_razon_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (c.rut_identificacion && c.rut_identificacion.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // FILTRO: Combinamos la pestaña activa con la búsqueda de texto
+  const filteredClients = clients.filter(c => {
+    const matchesTab = activeTab === 'INACTIVO' ? c.estado !== 'ACTIVO' : c.estado === 'ACTIVO';
+    const matchesSearch = c.nombre_razon_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (c.rut_identificacion && c.rut_identificacion.toLowerCase().includes(searchTerm.toLowerCase()));
+    return matchesTab && matchesSearch;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -184,6 +188,30 @@ export default function ClientesPage() {
           Nuevo Cliente
         </button>
       </header>
+
+      {/* SISTEMA DE PESTAÑAS */}
+      <div className="flex space-x-6 border-b border-slate-200 mb-6 px-1">
+        <button
+          onClick={() => setActiveTab('ACTIVO')}
+          className={`pb-3 text-sm font-semibold transition-colors relative ${
+            activeTab === 'ACTIVO'
+              ? 'text-blue-700 border-b-2 border-blue-700'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Clientes Activos
+        </button>
+        <button
+          onClick={() => setActiveTab('INACTIVO')}
+          className={`pb-3 text-sm font-semibold transition-colors relative ${
+            activeTab === 'INACTIVO'
+              ? 'text-blue-700 border-b-2 border-blue-700'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Histórico / Inactivos
+        </button>
+      </div>
 
       <div className="mb-6 flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
         <Search className="h-5 w-5 text-slate-400 ml-2" />
@@ -216,17 +244,22 @@ export default function ClientesPage() {
                 </tr>
               ) : filteredClients.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-slate-500 text-xs">No hay clientes registrados.</td>
+                  <td colSpan="6" className="px-6 py-8 text-center text-slate-500 text-xs">No se encontraron clientes en esta categoría.</td>
                 </tr>
               ) : (
                 filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-slate-50/80 transition-colors">
+                  <tr key={client.id} className={`transition-colors ${client.estado === 'ACTIVO' ? 'hover:bg-slate-50/80' : 'bg-slate-50 opacity-80'}`}>
                     <td className="px-6 py-4 font-semibold text-slate-900">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">
                           {client.tipo_cliente === 'PERSONA_NATURAL' ? <User className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
                         </div>
                         {client.nombre_razon_social}
+                        {client.estado !== 'ACTIVO' && (
+                          <span className="ml-2 text-[10px] font-bold text-slate-400 bg-slate-200 px-2 py-0.5 rounded uppercase">
+                            {client.estado}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -257,7 +290,12 @@ export default function ClientesPage() {
                     <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
                       <button 
                         onClick={() => openContractModal(client)}
-                        className="inline-flex items-center gap-1 rounded bg-blue-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-800 transition-colors shadow-sm"
+                        disabled={client.estado !== 'ACTIVO'}
+                        className={`inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
+                          client.estado === 'ACTIVO' 
+                            ? 'bg-blue-900 text-white hover:bg-blue-800' 
+                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        }`}
                       >
                         <PlusCircle className="h-3.5 w-3.5" /> Asignar Servicio
                       </button>
@@ -277,7 +315,7 @@ export default function ClientesPage() {
       </section>
 
       {/* =========================================================
-          MODAL 1: CREAR / EDITAR CLIENTE (VISUAL RESTAURADA)
+          MODAL 1: CREAR / EDITAR CLIENTE
           ========================================================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
@@ -329,7 +367,7 @@ export default function ClientesPage() {
                 </div>
               </div>
 
-              {/* FILA 3: Correo y Teléfono (LOS CAMPOS QUE HABÍAN DESAPARECIDO) */}
+              {/* FILA 3: Correo y Teléfono */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Correo Electrónico (Opcional)</label>
@@ -384,7 +422,7 @@ export default function ClientesPage() {
       )}
 
       {/* =========================================================
-          MODAL 2: ASIGNAR SERVICIO A CLIENTE (INTACTO)
+          MODAL 2: ASIGNAR SERVICIO A CLIENTE
           ========================================================= */}
       {contractClient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
